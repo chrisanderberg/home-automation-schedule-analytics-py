@@ -27,6 +27,11 @@ class HttpJsonTests(unittest.TestCase):
         # Verifies empty body returns explicit error payload when requested.
         self.assertEqual(decode_json_body("", decode_error_as_error_payload=True), {"error": ""})
 
+    def test_decode_empty_body_raises_when_error_payload_disabled(self):
+        # Verifies empty body raises consistently with other invalid JSON payloads.
+        with self.assertRaises(ValueError):
+            decode_json_body("", decode_error_as_error_payload=False)
+
 
 if __name__ == "__main__":
     unittest.main()

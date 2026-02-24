@@ -39,9 +39,15 @@ class ServerController:
 
     def __init__(self, cfg: Config, main_port: int = 8080, testing_port: int = 8081):
         self._stop = threading.Event()
+        self._shutdown_lock = threading.Lock()
         self._shutdown_started = False
         self.main_server = make_server("0.0.0.0", main_port, create_main_app(cfg))
-        self.testing_server = make_server("0.0.0.0", testing_port, create_testing_app(cfg))
+        try:
+            self.testing_server = make_server("0.0.0.0", testing_port, create_testing_app(cfg))
+        except Exception:
+            self.main_server.shutdown()
+            self.main_server.server_close()
+            raise
         self.threads = [
             ServerThread(self.main_server, threading.Thread(target=self.main_server.serve_forever, daemon=True)),
             ServerThread(
@@ -57,10 +63,21 @@ class ServerController:
     def request_stop(self) -> None:
         self._stop.set()
 
+    def should_run(self) -> bool:
+        if self._stop.is_set():
+            return False
+        for item in self.threads:
+            if not item.thread.is_alive():
+                logger.error("server thread exited unexpectedly: %r (server=%r)", item.thread, item.server)
+                self._stop.set()
+                return False
+        return True
+
     def stop(self) -> None:
-        if self._shutdown_started:
-            return
-        self._shutdown_started = True
+        with self._shutdown_lock:
+            if self._shutdown_started:
+                return
+            self._shutdown_started = True
         self._stop.set()
         for item in self.threads:
             item.server.shutdown()
@@ -81,14 +98,26 @@ def _load_config() -> Config:
         longitude = float(os.environ["HAA_LONGITUDE"])
     except ValueError as exc:
         raise ConfigurationError("HAA_LATITUDE and HAA_LONGITUDE must be numeric") from exc
+    if not (-90.0 <= latitude <= 90.0):
+        raise ConfigurationError("HAA_LATITUDE must be between -90 and 90")
+    if not (-180.0 <= longitude <= 180.0):
+        raise ConfigurationError("HAA_LONGITUDE must be between -180 and 180")
     return Config(time_zone=time_zone, latitude=latitude, longitude=longitude)
 
 
 def run() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = _load_config()
-    main_port = int(os.getenv("HAA_MAIN_PORT", "8080"))
-    testing_port = int(os.getenv("HAA_TESTING_PORT", "8081"))
+    main_port_raw = os.getenv("HAA_MAIN_PORT", "8080")
+    testing_port_raw = os.getenv("HAA_TESTING_PORT", "8081")
+    try:
+        main_port = int(main_port_raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"invalid HAA_MAIN_PORT value: {main_port_raw!r}") from exc
+    try:
+        testing_port = int(testing_port_raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"invalid HAA_TESTING_PORT value: {testing_port_raw!r}") from exc
 
     controller = ServerController(cfg, main_port=main_port, testing_port=testing_port)
 
@@ -103,7 +132,7 @@ def run() -> int:
     logger.info("testing API listening on :%s", testing_port)
 
     try:
-        while not controller._stop.is_set() and any(item.thread.is_alive() for item in controller.threads):
+        while controller.should_run():
             time.sleep(0.2)
     finally:
         controller.stop()

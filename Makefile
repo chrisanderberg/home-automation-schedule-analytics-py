@@ -1,4 +1,4 @@
-PYTHON ?= python
+PYTHON ?= python3
 PYTHONPATH_BASE=$(CURDIR)/shared-logic/src:$(CURDIR)/aggregation/src:$(CURDIR)/reporting/src
 
 .PHONY: setup setup-test setup-aggregation setup-reporting setup-dev check-test-deps test test-shared test-aggregation test-reporting

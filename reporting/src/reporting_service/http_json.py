@@ -23,7 +23,7 @@ def decode_json_body(body: str, *, decode_error_as_error_payload: bool) -> Any:
     if not body:
         if decode_error_as_error_payload:
             return {"error": ""}
-        return {}
+        raise ValueError("invalid JSON body")
 
     try:
         decoded = json.loads(body)

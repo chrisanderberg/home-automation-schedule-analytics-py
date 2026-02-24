@@ -188,6 +188,9 @@ def create_main_app(cfg: Config) -> Flask:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("controls endpoint failed: %s", exc)
+            return jsonify({"error": "internal server error"}), 500
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
@@ -204,6 +207,9 @@ def create_main_app(cfg: Config) -> Flask:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("holding_intervals endpoint failed: %s", exc)
+            return jsonify({"error": "internal server error"}), 500
 
     @app.post("/v1/transitions")
     def transitions():
@@ -220,6 +226,9 @@ def create_main_app(cfg: Config) -> Flask:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("transitions endpoint failed: %s", exc)
+            return jsonify({"error": "internal server error"}), 500
 
     @app.post("/v1/snapshots")
     def snapshots():
@@ -282,7 +291,7 @@ def create_testing_app(cfg: Config) -> Flask:
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
-            if exc.field == "testName":
+            if getattr(exc, "field", None) == "testName":
                 return jsonify({"error": str(exc)}), 400
             return jsonify({"error": "invalid input"}), 400
 
@@ -303,7 +312,7 @@ def create_testing_app(cfg: Config) -> Flask:
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
-            if exc.field == "testName":
+            if getattr(exc, "field", None) == "testName":
                 return jsonify({"error": str(exc)}), 400
             return jsonify({"error": "invalid input"}), 400
 

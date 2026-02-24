@@ -10,6 +10,12 @@ class ValidationError(ValueError):
         super().__init__(message)
         self.field = field
 
+    def __str__(self) -> str:
+        message = super().__str__()
+        if self.field is None:
+            return message
+        return f"{message} (field={self.field})"
+
 
 class NotFoundError(LookupError):
     """Raised when required rows are not found in persistent storage."""

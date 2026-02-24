@@ -14,6 +14,17 @@ from .errors import NotFoundError
 
 logger = logging.getLogger(__name__)
 
+AGGREGATES_DDL = """
+CREATE TABLE IF NOT EXISTS aggregates (
+  control_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  quarter_index INTEGER NOT NULL,
+  blob BLOB NOT NULL,
+  PRIMARY KEY (control_id, model_id, quarter_index),
+  FOREIGN KEY (control_id) REFERENCES controls(control_id) ON DELETE RESTRICT
+)
+"""
+
 SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS controls (
@@ -23,16 +34,7 @@ SCHEMA_STATEMENTS = (
       state_labels TEXT
     )
     """,
-    """
-    CREATE TABLE IF NOT EXISTS aggregates (
-      control_id TEXT NOT NULL,
-      model_id TEXT NOT NULL,
-      quarter_index INTEGER NOT NULL,
-      blob BLOB NOT NULL,
-      PRIMARY KEY (control_id, model_id, quarter_index),
-      FOREIGN KEY (control_id) REFERENCES controls(control_id) ON DELETE RESTRICT
-    )
-    """,
+    AGGREGATES_DDL,
 )
 
 
@@ -43,6 +45,7 @@ def open_db(db_path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -58,21 +61,32 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
     """Ensure aggregates.control_id foreign key exists for legacy databases."""
-    table_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates'"
-    ).fetchone()
-    if table_exists is None:
-        return
-
-    fk_rows = conn.execute("PRAGMA foreign_key_list(aggregates)").fetchall()
-    has_fk = any(row[2] == "controls" and row[3] == "control_id" for row in fk_rows)
-    if has_fk:
-        return
-
     try:
         conn.execute("BEGIN IMMEDIATE")
+        table_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates'"
+        ).fetchone()
+        if table_exists is None:
+            conn.execute("COMMIT")
+            return
+
+        fk_rows = conn.execute("PRAGMA foreign_key_list(aggregates)").fetchall()
+        has_fk = any(row[2] == "controls" and row[3] == "control_id" for row in fk_rows)
+        if has_fk:
+            conn.execute("COMMIT")
+            return
+
         conn.execute("ALTER TABLE aggregates RENAME TO aggregates_old")
-        conn.execute(SCHEMA_STATEMENTS[1].strip())
+        conn.execute(AGGREGATES_DDL.strip())
+        dropped_rows = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM aggregates_old
+            LEFT JOIN controls ON controls.control_id = aggregates_old.control_id
+            WHERE controls.control_id IS NULL
+            """
+        ).fetchone()[0]
+        logger.warning("dropping %d orphaned aggregate rows during foreign key migration", dropped_rows)
         conn.execute(
             """
             INSERT INTO aggregates (control_id, model_id, quarter_index, blob)
@@ -84,6 +98,7 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE aggregates_old")
         conn.execute("COMMIT")
     except Exception:
+        logger.exception("migration failed during aggregates fk migration")
         try:
             conn.execute("ROLLBACK")
         except Exception:

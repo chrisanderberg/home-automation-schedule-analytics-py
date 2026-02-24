@@ -7,11 +7,15 @@ from datetime import UTC, datetime
 from .contracts import QuarterSpan
 
 
+def _quarter_index_from_dt(dt: datetime) -> int:
+    quarter_number = ((dt.month - 1) // 3) + 1
+    return (dt.year - 1970) * 4 + (quarter_number - 1)
+
+
 def quarter_index_utc(timestamp_ms: int) -> int:
     """Return quarter index: (year - 1970) * 4 + (quarter - 1)."""
     dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
-    quarter = ((dt.month - 1) // 3) + 1
-    return (dt.year - 1970) * 4 + (quarter - 1)
+    return _quarter_index_from_dt(dt)
 
 
 def split_interval_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
@@ -24,7 +28,7 @@ def split_interval_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
     while cur < end_ms:
         dt = datetime.fromtimestamp(cur / 1000, tz=UTC)
         quarter_number = ((dt.month - 1) // 3) + 1
-        q_idx = (dt.year - 1970) * 4 + (quarter_number - 1)
+        q_idx = _quarter_index_from_dt(dt)
         next_q_month = (quarter_number * 3) + 1
         year = dt.year
         if next_q_month == 13:

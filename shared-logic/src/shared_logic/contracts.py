@@ -44,6 +44,8 @@ class Control:
         """Validate control metadata invariants."""
         if self.num_states < 1:
             raise ValueError("num_states must be >= 1")
+        if self.state_labels is not None and len(self.state_labels) != self.num_states:
+            raise ValueError("len(state_labels) must equal num_states")
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,7 @@ class BucketSpan:
     millis: int
 
     def __post_init__(self) -> None:
-        """Validate elapsed milliseconds is non-negative."""
+        """Validate `bucket` and `millis` are non-negative, raising ValueError when either is negative."""
         if self.bucket < 0:
             raise ValueError("bucket must be non-negative")
         if self.millis < 0:

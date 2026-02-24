@@ -53,7 +53,9 @@ def test_data_root() -> Path:
     if override:
         override_path = Path(override).resolve()
         if not override_path.exists() or not override_path.is_dir():
-            raise RuntimeError(f"TEST_DATA_DIR does not exist or is not a directory: {override_path}")
+            raise RuntimeError(
+                f"TEST_DATA_DIR does not exist or is not a directory: provided={override!r} resolved={override_path}"
+            )
         return override_path
     return repository_root() / "test-data"
 

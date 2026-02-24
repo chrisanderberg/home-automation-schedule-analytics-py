@@ -71,26 +71,26 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
 
         def _update(blob: Blob, span_start: int = span_start, span_end: int = span_end) -> None:
             splitters = [
-                (CLOCK_UTC, lambda span_start=span_start, span_end=span_end: split_interval_utc(span_start, span_end)),
+                (CLOCK_UTC, lambda: split_interval_utc(span_start, span_end)),
                 (
                     CLOCK_LOCAL,
-                    lambda span_start=span_start, span_end=span_end: split_interval_local(span_start, span_end, cfg.time_zone),
+                    lambda: split_interval_local(span_start, span_end, cfg.time_zone),
                 ),
                 (
                     CLOCK_MEAN_SOLAR,
-                    lambda span_start=span_start, span_end=span_end: split_interval_mean_solar(
+                    lambda: split_interval_mean_solar(
                         span_start, span_end, cfg.latitude, cfg.longitude
                     ),
                 ),
                 (
                     CLOCK_APPARENT_SOLAR,
-                    lambda span_start=span_start, span_end=span_end: split_interval_apparent_solar(
+                    lambda: split_interval_apparent_solar(
                         span_start, span_end, cfg.latitude, cfg.longitude
                     ),
                 ),
                 (
                     CLOCK_UNEQUAL_HOURS,
-                    lambda span_start=span_start, span_end=span_end: split_interval_unequal_hours(
+                    lambda: split_interval_unequal_hours(
                         span_start, span_end, cfg.latitude, cfg.longitude
                     ),
                 ),
