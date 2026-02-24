@@ -185,9 +185,8 @@ def _open_test_db(test_name: str):
     Returns:
         Tuple of `(connection, db_path)` for the test database.
     """
-    root = test_data_root()
-    root.mkdir(parents=True, exist_ok=True)
-    db_path = root / f"{test_name}-test-data.sqlite"
+    db_path = _test_db_path(test_name)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = open_db(db_path)
     init_schema(conn)
     return conn, db_path
@@ -394,7 +393,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 optional=["stateLabels"],
             )
             control, test_name = _validate_control_payload(payload, require_test_name=True)
-            conn, _ = _open_test_db(str(test_name))
+            conn, _ = _open_test_db(test_name)
             try:
                 upsert_control(conn, control)
             finally:
@@ -404,6 +403,9 @@ def create_testing_app(cfg: Config) -> Flask:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("testing controls endpoint failed: %s", exc)
+            return jsonify({"error": str(exc)}), 500
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
@@ -421,7 +423,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 required=["testName", "controlId", "modelId", "state", "startTimeMs", "endTimeMs"],
             )
             input_data, test_name = _validate_holding_payload(payload, require_test_name=True)
-            conn, _ = _open_test_db(str(test_name))
+            conn, _ = _open_test_db(test_name)
             try:
                 ingest_holding(conn, cfg, input_data)
             finally:
@@ -430,9 +432,10 @@ def create_testing_app(cfg: Config) -> Flask:
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
-            if getattr(exc, "field", None) == "testName":
-                return jsonify({"error": str(exc)}), 400
-            return jsonify({"error": "invalid input"}), 400
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("testing holding_intervals endpoint failed: %s", exc)
+            return jsonify({"error": str(exc)}), 500
 
     @app.post("/v1/transitions")
     def transitions():
@@ -450,7 +453,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 required=["testName", "controlId", "modelId", "fromState", "toState", "timestampMs"],
             )
             input_data, test_name = _validate_transition_payload(payload, require_test_name=True)
-            conn, _ = _open_test_db(str(test_name))
+            conn, _ = _open_test_db(test_name)
             try:
                 ingest_transition(conn, cfg, input_data)
             finally:
@@ -459,9 +462,10 @@ def create_testing_app(cfg: Config) -> Flask:
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
-            if getattr(exc, "field", None) == "testName":
-                return jsonify({"error": str(exc)}), 400
-            return jsonify({"error": "invalid input"}), 400
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("testing transitions endpoint failed: %s", exc)
+            return jsonify({"error": str(exc)}), 500
 
     @app.post("/v1/snapshots")
     def snapshots():
@@ -517,5 +521,8 @@ def create_testing_app(cfg: Config) -> Flask:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive API surface
+            app.logger.exception("testing reset endpoint failed: %s", exc)
+            return jsonify({"error": str(exc)}), 500
 
     return app

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 from .blob import (
     Blob,
@@ -85,54 +86,47 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
         span_start = q_span.start_ms
         span_end = q_span.end_ms
 
-        def _update(blob: Blob, span_start: int = span_start, span_end: int = span_end) -> None:
-            """Apply holding millis for one quarter span to all clock buckets.
-
-            Args:
-                blob: Aggregate blob to mutate.
-                span_start: Inclusive start time for the quarter sub-interval.
-                span_end: Exclusive end time for the quarter sub-interval.
-
-            Returns:
-                None.
-            """
-            splitters = [
-                (CLOCK_UTC, lambda: split_interval_utc(span_start, span_end)),
-                (
-                    CLOCK_LOCAL,
-                    lambda: split_interval_local(span_start, span_end, cfg.time_zone),
-                ),
-                (
-                    CLOCK_MEAN_SOLAR,
-                    lambda: split_interval_mean_solar(
-                        span_start, span_end, cfg.latitude, cfg.longitude
+        def _make_update(span_start_ms: int, span_end_ms: int) -> Callable[[Blob], None]:
+            def _update(blob: Blob) -> None:
+                splitters = [
+                    (CLOCK_UTC, lambda: split_interval_utc(span_start_ms, span_end_ms)),
+                    (
+                        CLOCK_LOCAL,
+                        lambda: split_interval_local(span_start_ms, span_end_ms, cfg.time_zone),
                     ),
-                ),
-                (
-                    CLOCK_APPARENT_SOLAR,
-                    lambda: split_interval_apparent_solar(
-                        span_start, span_end, cfg.latitude, cfg.longitude
+                    (
+                        CLOCK_MEAN_SOLAR,
+                        lambda: split_interval_mean_solar(
+                            span_start_ms, span_end_ms, cfg.latitude, cfg.longitude
+                        ),
                     ),
-                ),
-                (
-                    CLOCK_UNEQUAL_HOURS,
-                    lambda: split_interval_unequal_hours(
-                        span_start, span_end, cfg.latitude, cfg.longitude
+                    (
+                        CLOCK_APPARENT_SOLAR,
+                        lambda: split_interval_apparent_solar(
+                            span_start_ms, span_end_ms, cfg.latitude, cfg.longitude
+                        ),
                     ),
-                ),
-            ]
+                    (
+                        CLOCK_UNEQUAL_HOURS,
+                        lambda: split_interval_unequal_hours(
+                            span_start_ms, span_end_ms, cfg.latitude, cfg.longitude
+                        ),
+                    ),
+                ]
 
-            for clock_idx, split_fn in splitters:
-                try:
-                    spans = split_fn()
-                except UndefinedClockError:
-                    continue
-                for span in spans:
-                    idx = hold_index(input_data.state, clock_idx, span.bucket, control.num_states)
-                    current = blob.get_u64(idx)
-                    blob.set_u64(idx, current + span.millis)
+                for clock_idx, split_fn in splitters:
+                    try:
+                        spans = split_fn()
+                    except UndefinedClockError:
+                        continue
+                    for span in spans:
+                        idx = hold_index(input_data.state, clock_idx, span.bucket, control.num_states)
+                        current = blob.get_u64(idx)
+                        blob.set_u64(idx, current + span.millis)
 
-        update_aggregate(conn, key, control.num_states, _update)
+            return _update
+
+        update_aggregate(conn, key, control.num_states, _make_update(span_start, span_end))
 
 
 def ingest_transition(conn: sqlite3.Connection, cfg: Config, input_data: TransitionInput) -> None:

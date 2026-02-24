@@ -46,9 +46,6 @@ def _latest_snapshot_path_in_dir(root: Path) -> Path:
 def _latest_snapshot_path() -> Path:
     """Resolve the newest production snapshot path.
 
-    Args:
-        None.
-
     Returns:
         Path to the newest production snapshot file.
     """
@@ -57,9 +54,6 @@ def _latest_snapshot_path() -> Path:
 
 def _latest_testing_snapshot_path() -> Path:
     """Resolve the newest testing snapshot path.
-
-    Args:
-        None.
 
     Returns:
         Path to the newest testing snapshot file.
@@ -273,7 +267,18 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
         context.log.warning(message)
         return MaterializeResult(metadata={"snapshot_missing": True, "error": message})
 
-    snapshot_path = test_snapshot_root() / f"{test_name}-{snapshot_name}-snapshot.sqlite"
+    snapshot_path_raw = None
+    for key in ("snapshotPath", "snapshot_path", "path", "filename"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            snapshot_path_raw = value
+            break
+    if snapshot_path_raw is not None:
+        snapshot_path = Path(snapshot_path_raw)
+        if not snapshot_path.is_absolute():
+            snapshot_path = test_snapshot_root() / snapshot_path
+    else:
+        snapshot_path = test_snapshot_root() / f"{test_name}-{snapshot_name}-snapshot.sqlite"
     if not snapshot_path.exists():
         raise RuntimeError(f"expected snapshot not found after export: {snapshot_path}")
 

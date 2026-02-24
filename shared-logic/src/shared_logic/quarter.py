@@ -16,6 +16,8 @@ def _quarter_index_from_dt(dt: datetime) -> int:
     Returns:
         Quarter index using `(year - 1970) * 4 + quarter_offset`.
     """
+    if dt.tzinfo is not UTC:
+        raise ValueError("dt must be UTC-aware (tzinfo=datetime.UTC)")
     quarter_number = ((dt.month - 1) // 3) + 1
     return (dt.year - 1970) * 4 + (quarter_number - 1)
 
@@ -35,8 +37,8 @@ def split_interval_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
     cur = start_ms
     while cur < end_ms:
         dt = datetime.fromtimestamp(cur / 1000, tz=UTC)
-        quarter_number = ((dt.month - 1) // 3) + 1
         q_idx = _quarter_index_from_dt(dt)
+        quarter_number = (q_idx % 4) + 1
         next_q_month = (quarter_number * 3) + 1
         year = dt.year
         if next_q_month == 13:

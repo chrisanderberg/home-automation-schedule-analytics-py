@@ -30,7 +30,7 @@ def export_snapshot_for_test(conn: sqlite3.Connection, test_name: str, snapshot_
 
 
 def _cleanup_sidecars(path: Path) -> None:
-    """Delete SQLite sidecar files (`-wal`, `-shm`) for a base path.
+    """Delete SQLite sidecar files (`-wal`, `-shm`, `-journal`) for a base path.
 
     Args:
         path: Base database path whose sidecars should be removed.
@@ -38,10 +38,8 @@ def _cleanup_sidecars(path: Path) -> None:
     Returns:
         None.
     """
-    for ext in ("-wal", "-shm"):
-        sidecar = path.with_name(path.name + ext)
-        if sidecar.exists():
-            sidecar.unlink()
+    for ext in ("-wal", "-shm", "-journal"):
+        path.with_name(path.name + ext).unlink(missing_ok=True)
 
 
 def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
@@ -67,9 +65,14 @@ def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
         success = True
     finally:
         if not success:
-            if temp_path.exists():
-                temp_path.unlink()
-            _cleanup_sidecars(temp_path)
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            try:
+                _cleanup_sidecars(temp_path)
+            except OSError:
+                pass
     return out_path.resolve()
 
 

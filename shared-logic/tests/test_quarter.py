@@ -36,8 +36,7 @@ class QuarterTests(unittest.TestCase):
         self.assertEqual(len(spans), 5)
         indices = [span.quarter_index for span in spans]
         for i in range(1, len(indices)):
-            self.assertNotEqual(indices[i], indices[i - 1])
-        self.assertEqual(indices, sorted(indices))
+            self.assertLess(indices[i - 1], indices[i])
 
     def test_split_rejects_zero_length_interval(self):
         # Verifies zero-length intervals are rejected.

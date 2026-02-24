@@ -76,6 +76,7 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
             conn.execute("COMMIT")
             return
 
+        conn.execute("DROP TABLE IF EXISTS aggregates_old")
         conn.execute("ALTER TABLE aggregates RENAME TO aggregates_old")
         conn.execute(AGGREGATES_DDL.strip())
         dropped_rows = conn.execute(
@@ -86,7 +87,8 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
             WHERE controls.control_id IS NULL
             """
         ).fetchone()[0]
-        logger.warning("dropping %d orphaned aggregate rows during foreign key migration", dropped_rows)
+        if dropped_rows > 0:
+            logger.warning("dropping %d orphaned aggregate rows during foreign key migration", dropped_rows)
         conn.execute(
             """
             INSERT INTO aggregates (control_id, model_id, quarter_index, blob)
@@ -103,6 +105,10 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
             conn.execute("ROLLBACK")
         except Exception:
             logger.exception("rollback failed during aggregates fk migration")
+        try:
+            conn.execute("DROP TABLE IF EXISTS aggregates_old")
+        except Exception:
+            logger.exception("cleanup failed while dropping stale aggregates_old")
         raise
 
 

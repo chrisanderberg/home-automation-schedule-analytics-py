@@ -1,4 +1,4 @@
-FROM python:3.11.12-slim
+FROM python:3.11.14-slim
 
 WORKDIR /app
 
@@ -10,10 +10,20 @@ COPY shared-logic /app/shared-logic
 COPY aggregation /app/aggregation
 COPY data /app/data
 
+RUN groupadd --system app && \
+    useradd --system --create-home --gid app app && \
+    chown -R app:app /app
+
 ENV PYTHONPATH=/app/shared-logic/src:/app/aggregation/src
 ENV HAA_MAIN_PORT=8080
 ENV HAA_TESTING_PORT=8081
+ENV HOME=/home/app
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=3).status == 200 else 1)"
+
+USER app
 
 CMD ["python", "-m", "aggregation_service.main"]

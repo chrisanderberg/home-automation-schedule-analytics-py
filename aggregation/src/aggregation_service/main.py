@@ -44,9 +44,6 @@ class ServerController:
             cfg: Runtime clock/location configuration shared by both apps.
             main_port: Port for the main API server.
             testing_port: Port for the testing API server.
-
-        Returns:
-            None.
         """
         self._stop = threading.Event()
         self._shutdown_lock = threading.Lock()
@@ -122,7 +119,13 @@ class ServerController:
             self._shutdown_started = True
         self._stop.set()
         for item in self.threads:
-            item.server.shutdown()
+            server = getattr(item, "server", None)
+            if server is None:
+                continue
+            try:
+                server.shutdown()
+            finally:
+                server.server_close()
         for item in self.threads:
             item.thread.join(timeout=5)
             if item.thread.is_alive():
@@ -172,10 +175,14 @@ def run() -> int:
         main_port = int(main_port_raw)
     except ValueError as exc:
         raise ConfigurationError(f"invalid HAA_MAIN_PORT value: {main_port_raw!r}") from exc
+    if not (1 <= main_port <= 65535):
+        raise ConfigurationError(f"invalid HAA_MAIN_PORT value: {main_port!r} (must be 1-65535)")
     try:
         testing_port = int(testing_port_raw)
     except ValueError as exc:
         raise ConfigurationError(f"invalid HAA_TESTING_PORT value: {testing_port_raw!r}") from exc
+    if not (1 <= testing_port <= 65535):
+        raise ConfigurationError(f"invalid HAA_TESTING_PORT value: {testing_port!r} (must be 1-65535)")
 
     controller = ServerController(cfg, main_port=main_port, testing_port=testing_port)
 

@@ -1,0 +1,30 @@
+name: Refresh Aggregation Base Image
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-python-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bump Python patch tag in aggregation Dockerfile
+        run: python .github/scripts/bump_python_base_tag.py aggregation/Dockerfile
+
+      - name: Create pull request for base image updates
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: codex/aggregation-python-base-bump
+          title: "chore(aggregation): bump Python base image patch version"
+          commit-message: "chore(aggregation): bump Python base image patch version"
+          body: |
+            Automated update for `aggregation/Dockerfile` Python base image patch tag.
+            This keeps patch-level security fixes current.

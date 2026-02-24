@@ -23,7 +23,7 @@ def decode_json_body(body: str, *, decode_error_as_error_payload: bool) -> Any:
     if not body:
         if decode_error_as_error_payload:
             return {"error": ""}
-        raise ValueError("invalid JSON body")
+        raise ValueError("empty JSON body")
 
     try:
         decoded = json.loads(body)
@@ -31,6 +31,6 @@ def decode_json_body(body: str, *, decode_error_as_error_payload: bool) -> Any:
         if decode_error_as_error_payload:
             sanitized_body = _sanitize_error_body(body)
             return {"error": sanitized_body}
-        raise ValueError("invalid JSON body")
+        raise ValueError("malformed JSON body") from None
 
     return decoded
