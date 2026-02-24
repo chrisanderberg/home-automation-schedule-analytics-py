@@ -15,7 +15,7 @@ def ensure_repo_src_paths() -> None:
         repo_root / "aggregation" / "src",
         repo_root / "reporting" / "src",
     ]
-    for path in candidates:
+    for path in reversed(candidates):
         path_str = str(path)
         if path.exists() and path_str not in sys.path:
             sys.path.insert(0, path_str)

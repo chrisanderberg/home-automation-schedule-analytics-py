@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY pyproject.toml /app/pyproject.toml
-RUN pip install --no-cache-dir Flask>=3.0.0
+RUN pip install --no-cache-dir "Flask>=3.0.0"
 
 COPY shared-logic /app/shared-logic
 COPY aggregation /app/aggregation

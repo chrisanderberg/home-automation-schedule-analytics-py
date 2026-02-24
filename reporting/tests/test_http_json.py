@@ -1,7 +1,5 @@
 """Reporting JSON helper tests."""
 
-from __future__ import annotations
-
 import unittest
 
 from reporting_service.http_json import decode_json_body

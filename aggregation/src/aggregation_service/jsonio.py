@@ -13,20 +13,28 @@ class BadRequestError(ValueError):
 
 def decode_strict_json(request: Request, required: Iterable[str], optional: Iterable[str] = ()) -> dict:
     """Decode JSON object and reject unknown or missing fields."""
-    data = request.get_json(silent=True)
+    if not request.is_json:
+        probe = request.get_json(force=True, silent=True)
+        if probe is None:
+            raise BadRequestError("Content-Type must be application/json")
+    try:
+        data = request.get_json(force=True)
+    except Exception as exc:  # pragma: no cover - flask parser differences
+        raise BadRequestError("invalid json body") from exc
     if not isinstance(data, dict):
-        raise BadRequestError("invalid json")
+        raise BadRequestError("JSON payload must be an object")
 
     req = set(required)
     opt = set(optional)
     allowed = req | opt
 
-    missing = sorted(req - set(data.keys()))
+    keys = set(data.keys())
+    missing = sorted(req - keys)
     if missing:
-        raise BadRequestError("missing required fields")
+        raise BadRequestError(f"missing required fields: {missing}")
 
-    unknown = sorted(set(data.keys()) - allowed)
+    unknown = sorted(keys - allowed)
     if unknown:
-        raise BadRequestError("unknown fields")
+        raise BadRequestError(f"unknown fields: {unknown}")
 
     return data

@@ -2,16 +2,32 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import os
 from pathlib import Path
+
+
+def _find_repo_root_from(start: Path) -> Path | None:
+    for parent in start.parents:
+        has_repo_dirs = (parent / "aggregation").is_dir() and (parent / "shared-logic").is_dir()
+        has_sentinel = (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file()
+        if has_repo_dirs and has_sentinel:
+            return parent
+    return None
 
 
 def repository_root() -> Path:
     """Locate repository root from this module path."""
     here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "aggregation").is_dir() and (parent / "shared-logic").is_dir():
-            return parent
+    found = _find_repo_root_from(here)
+    if found is not None:
+        return found
+
+    package_ref = Path(str(importlib.resources.files(__package__))).resolve()
+    found = _find_repo_root_from(package_ref)
+    if found is not None:
+        return found
+
     raise RuntimeError(f"repository root not found from {here}")
 
 

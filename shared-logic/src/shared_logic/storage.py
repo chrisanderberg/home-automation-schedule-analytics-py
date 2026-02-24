@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS aggregates (
   model_id TEXT NOT NULL,
   quarter_index INTEGER NOT NULL,
   blob BLOB NOT NULL,
-  PRIMARY KEY (control_id, model_id, quarter_index)
+  PRIMARY KEY (control_id, model_id, quarter_index),
+  FOREIGN KEY (control_id) REFERENCES controls(control_id)
 );
 """
 
@@ -32,8 +33,7 @@ CREATE TABLE IF NOT EXISTS aggregates (
 def open_db(db_path: str | Path) -> sqlite3.Connection:
     """Open SQLite connection with required pragmatic settings."""
     path = str(db_path)
-    # Main API server handles requests on a different thread than startup.
-    # Disable thread affinity checks so one long-lived connection can be reused.
+    # Keep connections permissive for service/test usage across framework internals.
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -42,13 +42,17 @@ def open_db(db_path: str | Path) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     """Create required tables when missing."""
-    conn.executescript(SCHEMA_SQL)
+    for statement in SCHEMA_SQL.split(";"):
+        stmt = statement.strip()
+        if not stmt:
+            continue
+        conn.execute(stmt)
 
 
 def upsert_control(conn: sqlite3.Connection, control: Control) -> None:
     """Insert or update control metadata by control_id."""
     labels: str | None = None
-    if control.state_labels:
+    if control.state_labels is not None:
         labels = json.dumps(control.state_labels)
     conn.execute(
         """
@@ -73,7 +77,7 @@ def get_control(conn: sqlite3.Connection, control_id: str) -> Control:
         raise NotFoundError("control not found")
 
     labels: list[str] | None = None
-    if row[3]:
+    if row[3] is not None:
         labels = json.loads(row[3])
 
     return Control(control_id=row[0], control_type=row[1], num_states=row[2], state_labels=labels)

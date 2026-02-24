@@ -4,11 +4,14 @@ Monorepo layout:
 - `aggregation/`: Flask aggregation APIs (`:8080` main, `:8081` testing)
 - `reporting/`: Dagster reporting assets/jobs/sensors
 - `shared-logic/`: shared domain/storage logic used by both services
-- `data/`: production SQLite DB and snapshot exports
+- `data/`: sanitized local development fixtures only; production snapshots belong in internal object storage/artifact store, not git
 
 ## Run aggregation service
 
 ```bash
+make setup-aggregation
+export HAA_LATITUDE="37.7749"
+export HAA_LONGITUDE="-122.4194"
 PYTHONPATH=shared-logic/src:aggregation/src python -m aggregation_service.main
 ```
 
@@ -29,6 +32,7 @@ make test
 Dependency setup options:
 
 ```bash
+make setup              # umbrella target: setup-test + setup-aggregation + setup-reporting
 make setup-test         # test dependencies only
 make setup-aggregation  # Flask aggregation runtime only
 make setup-reporting    # Dagster reporting runtime only

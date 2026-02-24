@@ -11,4 +11,4 @@
 - Snapshot export uses SQLite backup API (`sqlite3.Connection.backup`) for consistency.
 - Flask service runs both ports (`8080` and `8081`) in one process via two werkzeug servers on background threads.
 - Testing DBs/snapshots are rooted at `test-data/` (or `TEST_DATA_DIR` override) to preserve isolation from `data/`.
-- Default runtime clock config falls back to `UTC`, latitude `0`, longitude `0` when env vars are not set.
+- Runtime clock config requires explicit `HAA_LATITUDE` and `HAA_LONGITUDE` env vars; service startup fails fast when either is missing.

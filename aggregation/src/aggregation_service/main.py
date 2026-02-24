@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import signal
 import threading
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from werkzeug.serving import make_server
 
@@ -17,12 +19,18 @@ ensure_repo_src_paths()
 from aggregation_service.app_factory import create_main_app, create_testing_app  # noqa: E402
 from shared_logic.contracts import Config  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
+
+class ConfigurationError(RuntimeError):
+    """Raised when required runtime configuration is missing."""
+
 
 @dataclass
 class ServerThread:
     """Thread wrapper around a werkzeug WSGI server."""
 
-    server: any
+    server: Any
     thread: threading.Thread
 
 
@@ -50,12 +58,21 @@ class ServerController:
             item.server.shutdown()
         for item in self.threads:
             item.thread.join(timeout=5)
+            if item.thread.is_alive():
+                logger.warning("server thread did not stop cleanly: %r", item.thread)
 
 
 def _load_config() -> Config:
     time_zone = os.getenv("HAA_TIMEZONE", "UTC")
-    latitude = float(os.getenv("HAA_LATITUDE", "0"))
-    longitude = float(os.getenv("HAA_LONGITUDE", "0"))
+    missing = [name for name in ("HAA_LATITUDE", "HAA_LONGITUDE") if not os.getenv(name)]
+    if missing:
+        joined = ", ".join(missing)
+        raise ConfigurationError(f"missing required runtime env var(s): {joined}")
+    try:
+        latitude = float(os.environ["HAA_LATITUDE"])
+        longitude = float(os.environ["HAA_LONGITUDE"])
+    except ValueError as exc:
+        raise ConfigurationError("HAA_LATITUDE and HAA_LONGITUDE must be numeric") from exc
     return Config(time_zone=time_zone, latitude=latitude, longitude=longitude)
 
 

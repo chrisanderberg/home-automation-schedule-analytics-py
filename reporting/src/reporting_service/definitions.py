@@ -13,7 +13,12 @@ snapshot_job = define_asset_job("snapshot_job", selection=["snapshot_summary"])
 testing_snapshot_job = define_asset_job("testing_snapshot_job", selection=["testing_snapshot_summary"])
 testing_api_flow_job = define_asset_job("testing_api_flow_job", selection=["testing_api_snapshot_validation"])
 
-snapshot_schedule = ScheduleDefinition(job=snapshot_job, cron_schedule="0 2 * * *")
+snapshot_schedule = ScheduleDefinition(
+    name="snapshot_schedule",
+    job=snapshot_job,
+    cron_schedule="0 2 * * *",
+    execution_timezone="America/New_York",
+)
 
 definitions = Definitions(
     assets=[snapshot_summary, testing_snapshot_summary, testing_api_snapshot_validation],

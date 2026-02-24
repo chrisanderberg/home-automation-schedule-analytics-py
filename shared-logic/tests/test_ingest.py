@@ -70,6 +70,7 @@ class IngestTests(unittest.TestCase):
                 thread = threading.Thread(target=_worker)
                 thread.start()
                 thread.join(timeout=5)
+                self.assertFalse(thread.is_alive(), "worker thread did not finish in time")
                 self.assertEqual(error_box, [])
             finally:
                 conn.close()

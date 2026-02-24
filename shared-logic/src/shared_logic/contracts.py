@@ -43,6 +43,11 @@ class HoldingInput:
     start_time_ms: int
     end_time_ms: int
 
+    def __post_init__(self) -> None:
+        """Validate half-open interval shape."""
+        if self.end_time_ms <= self.start_time_ms:
+            raise ValueError("end_time_ms must be greater than start_time_ms")
+
 
 @dataclass(frozen=True)
 class TransitionInput:
@@ -62,6 +67,11 @@ class BucketSpan:
     bucket: int
     millis: int
 
+    def __post_init__(self) -> None:
+        """Validate elapsed milliseconds is non-negative."""
+        if self.millis < 0:
+            raise ValueError("millis must be non-negative")
+
 
 @dataclass(frozen=True)
 class QuarterSpan:
@@ -70,3 +80,8 @@ class QuarterSpan:
     quarter_index: int
     start_ms: int
     end_ms: int
+
+    def __post_init__(self) -> None:
+        """Validate quarter span interval shape."""
+        if self.end_ms <= self.start_ms:
+            raise ValueError("end_ms must be greater than start_ms")

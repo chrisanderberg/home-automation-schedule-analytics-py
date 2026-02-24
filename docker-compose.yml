@@ -13,6 +13,7 @@ services:
       HAA_TESTING_PORT: "8081"
     ports:
       - "8080:8080"
+      - "8081:8081"
     volumes:
       - app_data:/app/data
       - app_test_data:/app/test-data

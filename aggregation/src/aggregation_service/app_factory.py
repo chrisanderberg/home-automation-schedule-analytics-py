@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 from aggregation_service.bootstrap import ensure_repo_src_paths
 from aggregation_service.jsonio import BadRequestError, decode_strict_json
@@ -20,6 +21,8 @@ from shared_logic.paths import data_root, test_data_root
 from shared_logic.slug import is_valid_slug
 from shared_logic.snapshot import export_snapshot, export_snapshot_for_test, reset_test_db_files
 from shared_logic.storage import init_schema, open_db, upsert_control
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[Control, str | None]:
@@ -115,7 +118,19 @@ def _test_db_path(test_name: str) -> Path:
 def create_main_app(cfg: Config) -> Flask:
     """Create main API application bound to production DB path."""
     app = Flask("aggregation-main")
-    conn = _open_main_db()
+
+    def _get_conn():
+        conn = g.get("main_db_conn")
+        if conn is None:
+            conn = _open_main_db()
+            g.main_db_conn = conn
+        return conn
+
+    @app.teardown_appcontext
+    def _teardown_main_conn(_exception):
+        conn = g.pop("main_db_conn", None)
+        if conn is not None:
+            conn.close()
 
     @app.get("/v1/health")
     def health():
@@ -130,6 +145,7 @@ def create_main_app(cfg: Config) -> Flask:
                 optional=["stateLabels"],
             )
             control, _ = _validate_control_payload(payload, require_test_name=False)
+            conn = _get_conn()
             upsert_control(conn, control)
             return jsonify({"status": "accepted"}), 202
         except BadRequestError:
@@ -145,6 +161,7 @@ def create_main_app(cfg: Config) -> Flask:
                 required=["controlId", "modelId", "state", "startTimeMs", "endTimeMs"],
             )
             input_data, _ = _validate_holding_payload(payload, require_test_name=False)
+            conn = _get_conn()
             ingest_holding(conn, cfg, input_data)
             return jsonify({"status": "accepted"}), 202
         except BadRequestError:
@@ -160,6 +177,7 @@ def create_main_app(cfg: Config) -> Flask:
                 required=["controlId", "modelId", "fromState", "toState", "timestampMs"],
             )
             input_data, _ = _validate_transition_payload(payload, require_test_name=False)
+            conn = _get_conn()
             ingest_transition(conn, cfg, input_data)
             return jsonify({"status": "accepted"}), 202
         except BadRequestError:
@@ -171,12 +189,14 @@ def create_main_app(cfg: Config) -> Flask:
     def snapshots():
         try:
             decode_strict_json(request, required=[])
+            conn = _get_conn()
             path = export_snapshot(conn)
             return jsonify({"snapshotPath": str(path)}), 200
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
+        except BadRequestError as exc:
+            return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
-            return jsonify({"error": f"snapshot export failed: {exc}"}), 500
+            app.logger.exception("snapshot export failed: %s", exc)
+            return jsonify({"error": "snapshot export failed"}), 500
 
     return app
 
@@ -272,7 +292,8 @@ def create_testing_app(cfg: Config) -> Flask:
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
-            return jsonify({"error": f"snapshot export failed: {exc}"}), 500
+            logger.exception("snapshot export failed for testing api: %s", exc)
+            return jsonify({"error": "snapshot export failed"}), 500
 
     @app.post("/v1/reset")
     def reset():
