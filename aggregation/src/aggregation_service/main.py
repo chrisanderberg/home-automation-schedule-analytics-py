@@ -57,18 +57,18 @@ class ServerController:
         self._stop = threading.Event()
         self._shutdown_lock = threading.Lock()
         self._shutdown_started = False
+        main_app = create_main_app(cfg)
         try:
-            self.main_server = make_server("0.0.0.0", main_port, create_main_app(cfg))
+            self.main_server = make_server("0.0.0.0", main_port, main_app)
         except OSError as exc:
             raise PortBindError(main_port, exc) from exc
+        testing_app = create_testing_app(cfg)
         try:
-            self.testing_server = make_server("0.0.0.0", testing_port, create_testing_app(cfg))
+            self.testing_server = make_server("0.0.0.0", testing_port, testing_app)
         except OSError as exc:
-            self.main_server.shutdown()
             self.main_server.server_close()
             raise PortBindError(testing_port, exc) from exc
         except Exception:
-            self.main_server.shutdown()
             self.main_server.server_close()
             raise
         self.threads = [

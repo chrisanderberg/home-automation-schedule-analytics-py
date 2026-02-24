@@ -11,6 +11,7 @@ from pathlib import Path
 from dagster import (
     AssetExecutionContext,
     Failure,
+    MetadataValue,
     MaterializeResult,
     RunRequest,
     SensorEvaluationContext,
@@ -270,6 +271,13 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
         message = f"testing API unavailable at {base_url}: {exc}"
         context.log.error(message)
         raise Failure(description=message, metadata={"snapshot_missing": True}) from exc
+    except RuntimeError as exc:
+        message = (
+            "testing API validation failed"
+            f" (base_url={base_url}, test_name={test_name}, snapshot_name={snapshot_name}): {exc}"
+        )
+        context.log.error(message)
+        raise Failure(description=message, metadata={"snapshot_missing": True}) from exc
 
     snapshot_path_raw = None
     for key in ("snapshotPath", "snapshot_path", "path", "filename"):
@@ -286,7 +294,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
     if not snapshot_path.exists():
         raise Failure(
             description=f"expected snapshot not found after export: {snapshot_path}",
-            metadata={"snapshot_missing": True, "snapshot_path": str(snapshot_path)},
+            metadata={"snapshot_missing": True, "snapshot_path": MetadataValue.path(snapshot_path)},
         )
 
     with closing(sqlite3.connect(str(snapshot_path))) as conn:
@@ -296,12 +304,12 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
     if controls_count < 2:
         raise Failure(
             description=f"snapshot should contain at least 2 controls, got {controls_count}",
-            metadata={"snapshot_path": str(snapshot_path), "controls_count": controls_count},
+            metadata={"snapshot_path": MetadataValue.path(snapshot_path), "controls_count": controls_count},
         )
     if aggregates_count < 2:
         raise Failure(
             description=f"snapshot should contain at least 2 aggregates, got {aggregates_count}",
-            metadata={"snapshot_path": str(snapshot_path), "aggregates_count": aggregates_count},
+            metadata={"snapshot_path": MetadataValue.path(snapshot_path), "aggregates_count": aggregates_count},
         )
 
     return MaterializeResult(

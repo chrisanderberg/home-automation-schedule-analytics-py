@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,19 @@ from shared_logic.snapshot import export_snapshot, export_snapshot_for_test, res
 from shared_logic.storage import init_schema, open_db, upsert_control
 
 _initialized_test_dbs: set[str] = set()
+_initialized_test_dbs_lock = threading.Lock()
+_test_db_init_locks: dict[str, threading.Lock] = {}
+_test_db_init_locks_guard = threading.Lock()
+
+
+def _test_db_init_lock(test_name: str) -> threading.Lock:
+    """Return a lock dedicated to one test DB initialization key."""
+    with _test_db_init_locks_guard:
+        lock = _test_db_init_locks.get(test_name)
+        if lock is None:
+            lock = threading.Lock()
+            _test_db_init_locks[test_name] = lock
+        return lock
 
 
 def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[Control, str | None]:
@@ -190,12 +204,20 @@ def _open_test_db(test_name: str):
     """
     db_path = _test_db_path(test_name)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    should_init_schema = test_name not in _initialized_test_dbs or not db_path.exists()
-    conn = open_db(db_path)
-    if should_init_schema:
-        init_schema(conn)
-        _initialized_test_dbs.add(test_name)
-    return conn, db_path
+    with _test_db_init_lock(test_name):
+        with _initialized_test_dbs_lock:
+            initialized = test_name in _initialized_test_dbs
+        should_init_schema = (not initialized) or (not db_path.exists())
+        conn = open_db(db_path)
+        if should_init_schema:
+            try:
+                init_schema(conn)
+            except Exception:
+                conn.close()
+                raise
+            with _initialized_test_dbs_lock:
+                _initialized_test_dbs.add(test_name)
+        return conn, db_path
 
 
 def _test_db_path(test_name: str) -> Path:
@@ -512,7 +534,8 @@ def create_testing_app(cfg: Config) -> Flask:
                 raise ValidationError("invalid testName")
             db_path = _test_db_path(test_name)
             reset_test_db_files(db_path)
-            _initialized_test_dbs.discard(test_name)
+            with _initialized_test_dbs_lock:
+                _initialized_test_dbs.discard(test_name)
             return jsonify({"status": "ok"}), 200
 
         return _handle_request(app, _action, log_message="testing reset endpoint failed")
