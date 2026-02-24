@@ -1,0 +1,36 @@
+version: '3.9'
+
+services:
+  aggregation:
+    build:
+      context: .
+      dockerfile: aggregation/Dockerfile
+    environment:
+      HAA_TIMEZONE: UTC
+      HAA_LATITUDE: "0"
+      HAA_LONGITUDE: "0"
+      HAA_MAIN_PORT: "8080"
+      HAA_TESTING_PORT: "8081"
+    ports:
+      - "8080:8080"
+    volumes:
+      - app_data:/app/data
+      - app_test_data:/app/test-data
+
+  reporting:
+    build:
+      context: .
+      dockerfile: reporting/Dockerfile
+    environment:
+      HAA_TESTING_API_URL: http://aggregation:8081
+    depends_on:
+      - aggregation
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_data:/app/data
+      - app_test_data:/app/test-data
+
+volumes:
+  app_data:
+  app_test_data:

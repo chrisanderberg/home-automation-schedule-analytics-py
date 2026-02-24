@@ -1,0 +1,1 @@
+"""Flask aggregation service."""

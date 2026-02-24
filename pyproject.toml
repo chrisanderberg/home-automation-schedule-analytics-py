@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "home-automation-schedule-analytics"
+version = "0.1.0"
+description = "Aggregation and reporting services for home automation schedule analytics"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+aggregation = [
+  "Flask>=3.0.0",
+]
+reporting = [
+  "dagster>=1.7.0",
+]
+test = [
+  "Flask>=3.0.0",
+]
+dev = [
+  "Flask>=3.0.0",
+  "dagster>=1.7.0",
+]
+
+[tool.setuptools]
+packages = []

@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# runtime sqlite artifacts
+data/*.sqlite
+data/*.sqlite-*
+data/snapshots/*.sqlite
+test-data/*.sqlite
+test-data/*.sqlite-*
+test-data/snapshots/*.sqlite
+
+# dagster local runtime state
+.tmp_dagster_home_*/
