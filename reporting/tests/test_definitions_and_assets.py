@@ -31,6 +31,7 @@ class ReportingDagsterTests(unittest.TestCase):
 
     def test_schedule_timezone_prefers_reporting_override_then_runtime_timezone(self):
         # Verifies schedule timezone can be driven by environment settings.
+        self.addCleanup(lambda: importlib.reload(definitions_module))
         with patch.dict(
             os.environ,
             {"HAA_REPORTING_TIMEZONE": "America/Chicago", "HAA_TIMEZONE": "UTC"},
@@ -68,6 +69,8 @@ class ReportingDagsterTests(unittest.TestCase):
     def test_testing_api_flow_fails_on_bad_snapshot_export_status(self):
         # Verifies non-200 snapshot export responses fail fast with step context.
         context = build_asset_context()
+        # Sequence maps to testing_api_snapshot_validation calls via reporting_service.assets._post_json:
+        # reset -> create c1 -> create c2 -> holding c1 -> holding c2 -> snapshot export.
         post_results = [
             (200, {"status": "ok"}),  # reset
             (202, {"status": "accepted"}),  # c1
@@ -76,9 +79,11 @@ class ReportingDagsterTests(unittest.TestCase):
             (202, {"status": "accepted"}),  # holding c2
             (500, {"error": "snapshot export failed"}),  # snapshot export
         ]
-        with patch("reporting_service.assets._post_json", side_effect=post_results):
+        expected_post_calls = 6
+        with patch("reporting_service.assets._post_json", side_effect=post_results) as mock_post:
             with self.assertRaisesRegex(RuntimeError, "snapshot export failed"):
                 assets.testing_api_snapshot_validation(context)
+        self.assertEqual(mock_post.call_count, expected_post_calls)
 
 
 if __name__ == "__main__":

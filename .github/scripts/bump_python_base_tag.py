@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import sys
@@ -48,6 +49,8 @@ def _fetch_latest_patch(major: int, minor: int) -> int:
             raise RuntimeError(f"failed to fetch Docker Hub tags from {next_url}: {details}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"failed to fetch Docker Hub tags from {next_url}: {exc.reason}") from exc
+        except http.client.HTTPException as exc:
+            raise RuntimeError(f"failed to fetch Docker Hub tags from {next_url}: {exc}") from exc
 
         for result in payload.get("results", []):
             name = result.get("name", "")

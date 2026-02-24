@@ -1,7 +1,7 @@
 PYTHON ?= python3
 PYTHONPATH_BASE=$(CURDIR)/shared-logic/src:$(CURDIR)/aggregation/src:$(CURDIR)/reporting/src
 
-.PHONY: setup setup-test setup-aggregation setup-reporting setup-dev check-test-deps test test-shared test-aggregation test-reporting
+.PHONY: setup setup-test setup-aggregation setup-reporting setup-dev check-shared-test-deps check-aggregation-test-deps check-reporting-test-deps test test-shared test-aggregation test-reporting
 
 setup: setup-test setup-aggregation setup-reporting
 
@@ -17,10 +17,16 @@ setup-reporting:
 setup-dev:
 	$(PYTHON) -m pip install -e '.[dev]'
 
-check-test-deps:
-	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "import flask, dagster; from aggregation_service.jsonio import decode_strict_json; from reporting_service.http_json import decode_json_body" >/dev/null 2>&1 || (echo "Missing dependency or import path. Run 'make setup' first."; exit 1)
+check-shared-test-deps:
+	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "from shared_logic.contracts import Config" >/dev/null 2>&1 || (echo "Missing shared test dependency or import path. Run 'make setup' first."; exit 1)
 
-test: check-test-deps
+check-aggregation-test-deps:
+	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "import flask; from aggregation_service.jsonio import decode_strict_json" >/dev/null 2>&1 || (echo "Missing aggregation test dependency or import path. Run 'make setup' first."; exit 1)
+
+check-reporting-test-deps:
+	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "import dagster; from reporting_service.http_json import decode_json_body" >/dev/null 2>&1 || (echo "Missing reporting test dependency or import path. Run 'make setup' first."; exit 1)
+
+test: check-shared-test-deps check-aggregation-test-deps check-reporting-test-deps
 	@set +e; \
 	shared=0; aggregation=0; reporting=0; \
 	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/shared-logic/tests -p "test_*.py" || shared=$$?; \
@@ -32,11 +38,11 @@ test: check-test-deps
 	fi; \
 	echo "Test summary: all suites passed"
 
-test-shared: check-test-deps
+test-shared: check-shared-test-deps
 	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/shared-logic/tests -p "test_*.py"
 
-test-aggregation: check-test-deps
+test-aggregation: check-aggregation-test-deps
 	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/aggregation/tests -p "test_*.py"
 
-test-reporting: check-test-deps
+test-reporting: check-reporting-test-deps
 	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/reporting/tests -p "test_*.py"

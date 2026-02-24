@@ -19,6 +19,8 @@ from shared_logic.slug import is_valid_slug
 from shared_logic.snapshot import export_snapshot, export_snapshot_for_test, reset_test_db_files
 from shared_logic.storage import init_schema, open_db, upsert_control
 
+_initialized_test_dbs: set[str] = set()
+
 
 def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[Control, str | None]:
     """Validate a control payload and build a `Control`.
@@ -188,8 +190,11 @@ def _open_test_db(test_name: str):
     """
     db_path = _test_db_path(test_name)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    should_init_schema = test_name not in _initialized_test_dbs or not db_path.exists()
     conn = open_db(db_path)
-    init_schema(conn)
+    if should_init_schema:
+        init_schema(conn)
+        _initialized_test_dbs.add(test_name)
     return conn, db_path
 
 
@@ -412,9 +417,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 optional=["stateLabels"],
             )
             control, test_name = _validate_control_payload(payload, require_test_name=True)
-            def _write(conn):
-                upsert_control(conn, control)
-            _with_test_db(test_name, _write)
+            _with_test_db(test_name, lambda conn: upsert_control(conn, control))
             return jsonify({"status": "accepted"}), 202
 
         return _handle_request(app, _action, log_message="testing controls endpoint failed")
@@ -435,9 +438,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 required=["testName", "controlId", "modelId", "state", "startTimeMs", "endTimeMs"],
             )
             input_data, test_name = _validate_holding_payload(payload, require_test_name=True)
-            def _write(conn):
-                ingest_holding(conn, cfg, input_data)
-            _with_test_db(test_name, _write)
+            _with_test_db(test_name, lambda conn: ingest_holding(conn, cfg, input_data))
             return jsonify({"status": "accepted"}), 202
 
         return _handle_request(app, _action, log_message="testing holding_intervals endpoint failed")
@@ -458,9 +459,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 required=["testName", "controlId", "modelId", "fromState", "toState", "timestampMs"],
             )
             input_data, test_name = _validate_transition_payload(payload, require_test_name=True)
-            def _write(conn):
-                ingest_transition(conn, cfg, input_data)
-            _with_test_db(test_name, _write)
+            _with_test_db(test_name, lambda conn: ingest_transition(conn, cfg, input_data))
             return jsonify({"status": "accepted"}), 202
 
         return _handle_request(app, _action, log_message="testing transitions endpoint failed")
@@ -513,6 +512,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 raise ValidationError("invalid testName")
             db_path = _test_db_path(test_name)
             reset_test_db_files(db_path)
+            _initialized_test_dbs.discard(test_name)
             return jsonify({"status": "ok"}), 200
 
         return _handle_request(app, _action, log_message="testing reset endpoint failed")

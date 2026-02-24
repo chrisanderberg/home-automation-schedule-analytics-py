@@ -269,7 +269,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
     except urllib.error.URLError as exc:
         message = f"testing API unavailable at {base_url}: {exc}"
         context.log.error(message)
-        raise Failure(description=message, metadata={"snapshot_missing": True, "error": message}) from exc
+        raise Failure(description=message, metadata={"snapshot_missing": True}) from exc
 
     snapshot_path_raw = None
     for key in ("snapshotPath", "snapshot_path", "path", "filename"):
@@ -284,16 +284,25 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
     else:
         snapshot_path = test_snapshot_root() / f"{test_name}-{snapshot_name}-snapshot.sqlite"
     if not snapshot_path.exists():
-        raise RuntimeError(f"expected snapshot not found after export: {snapshot_path}")
+        raise Failure(
+            description=f"expected snapshot not found after export: {snapshot_path}",
+            metadata={"snapshot_missing": True, "snapshot_path": str(snapshot_path)},
+        )
 
     with closing(sqlite3.connect(str(snapshot_path))) as conn:
         controls_count = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
         aggregates_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
 
     if controls_count < 2:
-        raise RuntimeError(f"snapshot should contain at least 2 controls, got {controls_count}")
+        raise Failure(
+            description=f"snapshot should contain at least 2 controls, got {controls_count}",
+            metadata={"snapshot_path": str(snapshot_path), "controls_count": controls_count},
+        )
     if aggregates_count < 2:
-        raise RuntimeError(f"snapshot should contain at least 2 aggregates, got {aggregates_count}")
+        raise Failure(
+            description=f"snapshot should contain at least 2 aggregates, got {aggregates_count}",
+            metadata={"snapshot_path": str(snapshot_path), "aggregates_count": aggregates_count},
+        )
 
     return MaterializeResult(
         metadata={

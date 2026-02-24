@@ -27,6 +27,14 @@ class ConfigurationError(RuntimeError):
     """Raised when required runtime configuration is missing."""
 
 
+class PortBindError(OSError):
+    """Wrap bind failures with the port that failed."""
+
+    def __init__(self, failing_port: int, cause: OSError):
+        super().__init__(cause.errno, cause.strerror or str(cause))
+        self.failing_port = failing_port
+
+
 @dataclass
 class ServerThread:
     """Thread wrapper around a werkzeug WSGI server."""
@@ -49,9 +57,16 @@ class ServerController:
         self._stop = threading.Event()
         self._shutdown_lock = threading.Lock()
         self._shutdown_started = False
-        self.main_server = make_server("0.0.0.0", main_port, create_main_app(cfg))
+        try:
+            self.main_server = make_server("0.0.0.0", main_port, create_main_app(cfg))
+        except OSError as exc:
+            raise PortBindError(main_port, exc) from exc
         try:
             self.testing_server = make_server("0.0.0.0", testing_port, create_testing_app(cfg))
+        except OSError as exc:
+            self.main_server.shutdown()
+            self.main_server.server_close()
+            raise PortBindError(testing_port, exc) from exc
         except Exception:
             self.main_server.shutdown()
             self.main_server.server_close()
@@ -203,13 +218,15 @@ def _create_server_controller(cfg: Config, *, main_port: int, testing_port: int)
     try:
         return ServerController(cfg, main_port=main_port, testing_port=testing_port)
     except OSError as exc:
+        failing_port = getattr(exc, "failing_port", None)
+        port_context = (
+            f"port {failing_port}" if isinstance(failing_port, int) else f"ports main={main_port}, testing={testing_port}"
+        )
         if exc.errno == EADDRINUSE:
             raise ConfigurationError(
-                f"failed to bind API ports (main={main_port}, testing={testing_port}): address already in use"
+                f"failed to bind API {port_context}: address already in use"
             ) from exc
-        raise ConfigurationError(
-            f"failed to bind API ports (main={main_port}, testing={testing_port}): {exc}"
-        ) from exc
+        raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
 
 
 def run() -> int:
