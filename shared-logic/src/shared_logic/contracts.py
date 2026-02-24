@@ -4,6 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+__all__ = [
+    "Config",
+    "Control",
+    "AggregateKey",
+    "HoldingInput",
+    "TransitionInput",
+    "BucketSpan",
+    "QuarterSpan",
+]
+
 
 @dataclass(frozen=True)
 class Config:
@@ -13,6 +23,13 @@ class Config:
     latitude: float
     longitude: float
 
+    def __post_init__(self) -> None:
+        """Validate location bounds for clock calculations."""
+        if not (-90.0 <= self.latitude <= 90.0):
+            raise ValueError("latitude must be in [-90, 90]")
+        if not (-180.0 <= self.longitude <= 180.0):
+            raise ValueError("longitude must be in [-180, 180]")
+
 
 @dataclass(frozen=True)
 class Control:
@@ -21,7 +38,12 @@ class Control:
     control_id: str
     control_type: str
     num_states: int
-    state_labels: list[str] | None = None
+    state_labels: tuple[str, ...] | None = None
+
+    def __post_init__(self) -> None:
+        """Validate control metadata invariants."""
+        if self.num_states < 1:
+            raise ValueError("num_states must be >= 1")
 
 
 @dataclass(frozen=True)
@@ -59,6 +81,13 @@ class TransitionInput:
     to_state: int
     timestamp_ms: int
 
+    def __post_init__(self) -> None:
+        """Validate transition input invariants."""
+        if self.timestamp_ms < 0:
+            raise ValueError("timestamp_ms must be non-negative")
+        if self.from_state == self.to_state:
+            raise ValueError("from_state must not equal to_state")
+
 
 @dataclass(frozen=True)
 class BucketSpan:
@@ -69,6 +98,8 @@ class BucketSpan:
 
     def __post_init__(self) -> None:
         """Validate elapsed milliseconds is non-negative."""
+        if self.bucket < 0:
+            raise ValueError("bucket must be non-negative")
         if self.millis < 0:
             raise ValueError("millis must be non-negative")
 

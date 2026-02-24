@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, g, jsonify, request
 
-from aggregation_service.bootstrap import ensure_repo_src_paths
 from aggregation_service.jsonio import BadRequestError, decode_strict_json
-
-ensure_repo_src_paths()
 
 from shared_logic.contracts import Config, Control, HoldingInput, TransitionInput
 from shared_logic.errors import ValidationError
@@ -22,8 +18,6 @@ from shared_logic.slug import is_valid_slug
 from shared_logic.snapshot import export_snapshot, export_snapshot_for_test, reset_test_db_files
 from shared_logic.storage import init_schema, open_db, upsert_control
 
-logger = logging.getLogger(__name__)
-
 
 def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[Control, str | None]:
     test_name = data.get("testName") if require_test_name else None
@@ -32,8 +26,8 @@ def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) 
     num_states = data.get("numStates")
     state_labels = data.get("stateLabels")
 
-    if require_test_name and not is_valid_slug(str(test_name or "")):
-        raise ValidationError("invalid testName")
+    if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
+        raise ValidationError("invalid testName", field="testName")
     if not isinstance(control_id, str) or not control_id:
         raise ValidationError("invalid controlId")
     if control_type not in ("discrete", "slider"):
@@ -46,12 +40,13 @@ def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) 
         if len(state_labels) != num_states:
             raise ValidationError("stateLabels length must equal numStates")
 
+    labels_tuple = tuple(state_labels) if state_labels is not None else None
     return (
         Control(
             control_id=control_id,
             control_type=control_type,
             num_states=num_states,
-            state_labels=state_labels,
+            state_labels=labels_tuple,
         ),
         test_name,
     )
@@ -59,31 +54,69 @@ def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) 
 
 def _validate_holding_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[HoldingInput, str | None]:
     test_name = data.get("testName") if require_test_name else None
-    if require_test_name and not is_valid_slug(str(test_name or "")):
-        raise ValidationError("invalid testName")
+    if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
+        raise ValidationError("invalid testName", field="testName")
 
-    input_data = HoldingInput(
-        control_id=str(data.get("controlId", "")),
-        model_id=str(data.get("modelId", "")),
-        state=int(data.get("state", -1)) if isinstance(data.get("state"), int) else -1,
-        start_time_ms=int(data.get("startTimeMs", 0)) if isinstance(data.get("startTimeMs"), int) else 0,
-        end_time_ms=int(data.get("endTimeMs", 0)) if isinstance(data.get("endTimeMs"), int) else 0,
-    )
+    control_id = data.get("controlId")
+    model_id = data.get("modelId")
+    state = data.get("state")
+    start_time_ms = data.get("startTimeMs")
+    end_time_ms = data.get("endTimeMs")
+    if not isinstance(control_id, str) or not control_id:
+        raise ValidationError("invalid controlId")
+    if not isinstance(model_id, str) or not model_id:
+        raise ValidationError("invalid modelId")
+    if not isinstance(state, int):
+        raise ValidationError("invalid state")
+    if not isinstance(start_time_ms, int):
+        raise ValidationError("invalid startTimeMs")
+    if not isinstance(end_time_ms, int):
+        raise ValidationError("invalid endTimeMs")
+
+    try:
+        input_data = HoldingInput(
+            control_id=control_id,
+            model_id=model_id,
+            state=state,
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
     return input_data, test_name
 
 
 def _validate_transition_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[TransitionInput, str | None]:
     test_name = data.get("testName") if require_test_name else None
-    if require_test_name and not is_valid_slug(str(test_name or "")):
-        raise ValidationError("invalid testName")
+    if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
+        raise ValidationError("invalid testName", field="testName")
 
-    input_data = TransitionInput(
-        control_id=str(data.get("controlId", "")),
-        model_id=str(data.get("modelId", "")),
-        from_state=int(data.get("fromState", -1)) if isinstance(data.get("fromState"), int) else -1,
-        to_state=int(data.get("toState", -1)) if isinstance(data.get("toState"), int) else -1,
-        timestamp_ms=int(data.get("timestampMs", 0)) if isinstance(data.get("timestampMs"), int) else 0,
-    )
+    control_id = data.get("controlId")
+    model_id = data.get("modelId")
+    from_state = data.get("fromState")
+    to_state = data.get("toState")
+    timestamp_ms = data.get("timestampMs")
+    if not isinstance(control_id, str) or not control_id:
+        raise ValidationError("invalid controlId")
+    if not isinstance(model_id, str) or not model_id:
+        raise ValidationError("invalid modelId")
+    if not isinstance(from_state, int):
+        raise ValidationError("invalid fromState")
+    if not isinstance(to_state, int):
+        raise ValidationError("invalid toState")
+    if not isinstance(timestamp_ms, int):
+        raise ValidationError("invalid timestampMs")
+
+    try:
+        input_data = TransitionInput(
+            control_id=control_id,
+            model_id=model_id,
+            from_state=from_state,
+            to_state=to_state,
+            timestamp_ms=timestamp_ms,
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
     return input_data, test_name
 
 
@@ -97,9 +130,7 @@ def _main_db_path() -> Path:
 def _open_main_db():
     db_path = _main_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = open_db(db_path)
-    init_schema(conn)
-    return conn
+    return open_db(db_path)
 
 
 def _open_test_db(test_name: str):
@@ -118,6 +149,11 @@ def _test_db_path(test_name: str) -> Path:
 def create_main_app(cfg: Config) -> Flask:
     """Create main API application bound to production DB path."""
     app = Flask("aggregation-main")
+    init_conn = _open_main_db()
+    try:
+        init_schema(init_conn)
+    finally:
+        init_conn.close()
 
     def _get_conn():
         conn = g.get("main_db_conn")
@@ -166,8 +202,8 @@ def create_main_app(cfg: Config) -> Flask:
             return jsonify({"status": "accepted"}), 202
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
-        except ValidationError:
-            return jsonify({"error": "invalid input"}), 400
+        except ValidationError as exc:
+            return jsonify({"error": str(exc)}), 400
 
     @app.post("/v1/transitions")
     def transitions():
@@ -182,8 +218,8 @@ def create_main_app(cfg: Config) -> Flask:
             return jsonify({"status": "accepted"}), 202
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
-        except ValidationError:
-            return jsonify({"error": "invalid input"}), 400
+        except ValidationError as exc:
+            return jsonify({"error": str(exc)}), 400
 
     @app.post("/v1/snapshots")
     def snapshots():
@@ -246,7 +282,7 @@ def create_testing_app(cfg: Config) -> Flask:
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
-            if "testName" in str(exc):
+            if exc.field == "testName":
                 return jsonify({"error": str(exc)}), 400
             return jsonify({"error": "invalid input"}), 400
 
@@ -267,7 +303,7 @@ def create_testing_app(cfg: Config) -> Flask:
         except BadRequestError:
             return jsonify({"error": "invalid json"}), 400
         except ValidationError as exc:
-            if "testName" in str(exc):
+            if exc.field == "testName":
                 return jsonify({"error": str(exc)}), 400
             return jsonify({"error": "invalid input"}), 400
 
@@ -292,7 +328,7 @@ def create_testing_app(cfg: Config) -> Flask:
         except ValidationError as exc:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
-            logger.exception("snapshot export failed for testing api: %s", exc)
+            app.logger.exception("snapshot export failed for testing api: %s", exc)
             return jsonify({"error": "snapshot export failed"}), 500
 
     @app.post("/v1/reset")

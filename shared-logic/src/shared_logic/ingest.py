@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from .blob import (
+    Blob,
     CLOCK_APPARENT_SOLAR,
     CLOCK_LOCAL,
     CLOCK_MEAN_SOLAR,
@@ -65,22 +66,33 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
 
     for q_span in quarter_spans:
         key = AggregateKey(control_id=input_data.control_id, model_id=input_data.model_id, quarter_index=q_span.quarter_index)
+        span_start = q_span.start_ms
+        span_end = q_span.end_ms
 
-        def _update(blob) -> None:
+        def _update(blob: Blob, span_start: int = span_start, span_end: int = span_end) -> None:
             splitters = [
-                (CLOCK_UTC, lambda: split_interval_utc(q_span.start_ms, q_span.end_ms)),
-                (CLOCK_LOCAL, lambda: split_interval_local(q_span.start_ms, q_span.end_ms, cfg.time_zone)),
+                (CLOCK_UTC, lambda span_start=span_start, span_end=span_end: split_interval_utc(span_start, span_end)),
+                (
+                    CLOCK_LOCAL,
+                    lambda span_start=span_start, span_end=span_end: split_interval_local(span_start, span_end, cfg.time_zone),
+                ),
                 (
                     CLOCK_MEAN_SOLAR,
-                    lambda: split_interval_mean_solar(q_span.start_ms, q_span.end_ms, cfg.latitude, cfg.longitude),
+                    lambda span_start=span_start, span_end=span_end: split_interval_mean_solar(
+                        span_start, span_end, cfg.latitude, cfg.longitude
+                    ),
                 ),
                 (
                     CLOCK_APPARENT_SOLAR,
-                    lambda: split_interval_apparent_solar(q_span.start_ms, q_span.end_ms, cfg.latitude, cfg.longitude),
+                    lambda span_start=span_start, span_end=span_end: split_interval_apparent_solar(
+                        span_start, span_end, cfg.latitude, cfg.longitude
+                    ),
                 ),
                 (
                     CLOCK_UNEQUAL_HOURS,
-                    lambda: split_interval_unequal_hours(q_span.start_ms, q_span.end_ms, cfg.latitude, cfg.longitude),
+                    lambda span_start=span_start, span_end=span_end: split_interval_unequal_hours(
+                        span_start, span_end, cfg.latitude, cfg.longitude
+                    ),
                 ),
             ]
 
@@ -112,7 +124,7 @@ def ingest_transition(conn: sqlite3.Connection, cfg: Config, input_data: Transit
     q_idx = quarter_index_utc(input_data.timestamp_ms)
     key = AggregateKey(control_id=input_data.control_id, model_id=input_data.model_id, quarter_index=q_idx)
 
-    def _update(blob) -> None:
+    def _update(blob: Blob) -> None:
         bucket_fns = [
             (CLOCK_UTC, lambda: bucket_at_utc(input_data.timestamp_ms)),
             (CLOCK_LOCAL, lambda: bucket_at_local(input_data.timestamp_ms, cfg.time_zone)),

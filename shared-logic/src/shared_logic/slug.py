@@ -1,10 +1,8 @@
-"""Slug validation helpers for testing API names."""
-
-from __future__ import annotations
+"""Slug validation helpers for API name validation in testing and production."""
 
 import re
 
-SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 def is_valid_slug(value: str) -> bool:

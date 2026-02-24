@@ -17,8 +17,9 @@ class IngestTests(unittest.TestCase):
         # Verifies holding+transition ingestion persists one aggregate row for a valid control/model/quarter.
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "test.sqlite"
-            conn = open_db(db_path)
+            conn = None
             try:
+                conn = open_db(db_path)
                 init_schema(conn)
                 upsert_control(
                     conn,
@@ -50,14 +51,16 @@ class IngestTests(unittest.TestCase):
                 agg_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
                 self.assertEqual(agg_count, 1)
             finally:
-                conn.close()
+                if conn is not None:
+                    conn.close()
 
     def test_connection_can_be_used_from_server_thread(self):
         # Verifies open_db disables sqlite thread affinity checks for server-thread request handling.
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "thread-test.sqlite"
-            conn = open_db(db_path)
+            conn = None
             try:
+                conn = open_db(db_path)
                 init_schema(conn)
                 error_box: list[Exception] = []
 
@@ -73,7 +76,8 @@ class IngestTests(unittest.TestCase):
                 self.assertFalse(thread.is_alive(), "worker thread did not finish in time")
                 self.assertEqual(error_box, [])
             finally:
-                conn.close()
+                if conn is not None:
+                    conn.close()
 
 
 if __name__ == "__main__":

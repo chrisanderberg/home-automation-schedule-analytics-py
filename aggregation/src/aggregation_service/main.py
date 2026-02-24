@@ -39,6 +39,7 @@ class ServerController:
 
     def __init__(self, cfg: Config, main_port: int = 8080, testing_port: int = 8081):
         self._stop = threading.Event()
+        self._shutdown_started = False
         self.main_server = make_server("0.0.0.0", main_port, create_main_app(cfg))
         self.testing_server = make_server("0.0.0.0", testing_port, create_testing_app(cfg))
         self.threads = [
@@ -53,7 +54,14 @@ class ServerController:
         for item in self.threads:
             item.thread.start()
 
+    def request_stop(self) -> None:
+        self._stop.set()
+
     def stop(self) -> None:
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
+        self._stop.set()
         for item in self.threads:
             item.server.shutdown()
         for item in self.threads:
@@ -77,6 +85,7 @@ def _load_config() -> Config:
 
 
 def run() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = _load_config()
     main_port = int(os.getenv("HAA_MAIN_PORT", "8080"))
     testing_port = int(os.getenv("HAA_TESTING_PORT", "8081"))
@@ -84,17 +93,17 @@ def run() -> int:
     controller = ServerController(cfg, main_port=main_port, testing_port=testing_port)
 
     def _handle_signal(_signum, _frame):
-        controller.stop()
+        controller.request_stop()
 
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
     controller.start()
-    print(f"main API listening on :{main_port}")
-    print(f"testing API listening on :{testing_port}")
+    logger.info("main API listening on :%s", main_port)
+    logger.info("testing API listening on :%s", testing_port)
 
     try:
-        while any(item.thread.is_alive() for item in controller.threads):
+        while not controller._stop.is_set() and any(item.thread.is_alive() for item in controller.threads):
             time.sleep(0.2)
     finally:
         controller.stop()

@@ -1,8 +1,14 @@
 """Shared error definitions."""
 
+__all__ = ["ValidationError", "NotFoundError", "UndefinedClockError"]
+
 
 class ValidationError(ValueError):
     """Raised when request input violates API/domain constraints."""
+
+    def __init__(self, message: str, *, field: str | None = None):
+        super().__init__(message)
+        self.field = field
 
 
 class NotFoundError(LookupError):

@@ -51,7 +51,7 @@ make test-reporting
 If `make` is unavailable, run directly:
 
 ```bash
-PYTHONPATH=shared-logic/src:aggregation/src:reporting/src python -m unittest discover -s shared-logic/tests -p "test_*.py"
-PYTHONPATH=shared-logic/src:aggregation/src:reporting/src python -m unittest discover -s aggregation/tests -p "test_*.py"
-PYTHONPATH=shared-logic/src:aggregation/src:reporting/src python -m unittest discover -s reporting/tests -p "test_*.py"
+PYTHONPATH=shared-logic/src python -m unittest discover -s shared-logic/tests
+PYTHONPATH=shared-logic/src:aggregation/src python -m unittest discover -s aggregation/tests
+PYTHONPATH=shared-logic/src:reporting/src python -m unittest discover -s reporting/tests
 ```

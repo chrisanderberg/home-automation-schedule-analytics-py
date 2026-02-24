@@ -50,6 +50,8 @@ class Blob:
             raise IndexError("index out of range")
         if value < 0:
             raise ValueError("u64 cannot be negative")
+        if value >= (1 << 64):
+            raise ValueError("u64 overflow")
         offset = index * 8
         struct.pack_into("<Q", self._data, offset, value)
 

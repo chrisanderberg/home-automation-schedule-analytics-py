@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
@@ -11,23 +12,28 @@ from .blob import Blob, GROUP_SIZE
 from .contracts import AggregateKey, Control
 from .errors import NotFoundError
 
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS controls (
-  control_id TEXT PRIMARY KEY,
-  control_type TEXT NOT NULL,
-  num_states INTEGER NOT NULL,
-  state_labels TEXT
-);
+logger = logging.getLogger(__name__)
 
-CREATE TABLE IF NOT EXISTS aggregates (
-  control_id TEXT NOT NULL,
-  model_id TEXT NOT NULL,
-  quarter_index INTEGER NOT NULL,
-  blob BLOB NOT NULL,
-  PRIMARY KEY (control_id, model_id, quarter_index),
-  FOREIGN KEY (control_id) REFERENCES controls(control_id)
-);
-"""
+SCHEMA_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS controls (
+      control_id TEXT PRIMARY KEY,
+      control_type TEXT NOT NULL,
+      num_states INTEGER NOT NULL,
+      state_labels TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS aggregates (
+      control_id TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      quarter_index INTEGER NOT NULL,
+      blob BLOB NOT NULL,
+      PRIMARY KEY (control_id, model_id, quarter_index),
+      FOREIGN KEY (control_id) REFERENCES controls(control_id) ON DELETE RESTRICT
+    )
+    """,
+)
 
 
 def open_db(db_path: str | Path) -> sqlite3.Connection:
@@ -42,11 +48,47 @@ def open_db(db_path: str | Path) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     """Create required tables when missing."""
-    for statement in SCHEMA_SQL.split(";"):
+    for statement in SCHEMA_STATEMENTS:
         stmt = statement.strip()
         if not stmt:
             continue
         conn.execute(stmt)
+    _migrate_aggregates_foreign_key(conn)
+
+
+def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
+    """Ensure aggregates.control_id foreign key exists for legacy databases."""
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates'"
+    ).fetchone()
+    if table_exists is None:
+        return
+
+    fk_rows = conn.execute("PRAGMA foreign_key_list(aggregates)").fetchall()
+    has_fk = any(row[2] == "controls" and row[3] == "control_id" for row in fk_rows)
+    if has_fk:
+        return
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("ALTER TABLE aggregates RENAME TO aggregates_old")
+        conn.execute(SCHEMA_STATEMENTS[1].strip())
+        conn.execute(
+            """
+            INSERT INTO aggregates (control_id, model_id, quarter_index, blob)
+            SELECT old.control_id, old.model_id, old.quarter_index, old.blob
+            FROM aggregates_old AS old
+            JOIN controls ON controls.control_id = old.control_id
+            """
+        )
+        conn.execute("DROP TABLE aggregates_old")
+        conn.execute("COMMIT")
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            logger.exception("rollback failed during aggregates fk migration")
+        raise
 
 
 def upsert_control(conn: sqlite3.Connection, control: Control) -> None:
@@ -74,11 +116,11 @@ def get_control(conn: sqlite3.Connection, control_id: str) -> Control:
         (control_id,),
     ).fetchone()
     if row is None:
-        raise NotFoundError("control not found")
+        raise NotFoundError(f"control not found: {control_id}")
 
-    labels: list[str] | None = None
+    labels: tuple[str, ...] | None = None
     if row[3] is not None:
-        labels = json.loads(row[3])
+        labels = tuple(json.loads(row[3]))
 
     return Control(control_id=row[0], control_type=row[1], num_states=row[2], state_labels=labels)
 
@@ -98,6 +140,9 @@ def update_aggregate(conn: sqlite3.Connection, key: AggregateKey, num_states: in
         ).fetchone()
 
         if row is None:
+            control_exists = conn.execute("SELECT 1 FROM controls WHERE control_id = ?", (key.control_id,)).fetchone()
+            if control_exists is None:
+                raise NotFoundError(f"control not found: {key.control_id}")
             blob = Blob(num_states)
         else:
             raw = row[0]
@@ -119,4 +164,7 @@ def update_aggregate(conn: sqlite3.Connection, key: AggregateKey, num_states: in
         committed = True
     finally:
         if not committed:
-            conn.execute("ROLLBACK")
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:
+                logger.exception("rollback failed during update_aggregate")

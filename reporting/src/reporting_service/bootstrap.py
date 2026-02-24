@@ -6,10 +6,17 @@ import sys
 from pathlib import Path
 
 
+def _find_repo_root(start: Path) -> Path:
+    for parent in (start, *start.parents):
+        if (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file() or (parent / ".git").exists():
+            return parent
+    raise RuntimeError(f"repository root not found from {start}")
+
+
 def ensure_repo_src_paths() -> None:
     """Add local src roots to sys.path for direct execution."""
     here = Path(__file__).resolve()
-    repo_root = here.parents[3]
+    repo_root = _find_repo_root(here)
     candidates = [
         repo_root / "shared-logic" / "src",
         repo_root / "reporting" / "src",

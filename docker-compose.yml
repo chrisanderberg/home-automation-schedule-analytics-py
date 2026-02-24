@@ -16,6 +16,12 @@ services:
     # Keep testing API internal; reporting reaches it via aggregation:8081 on the Docker network.
     expose:
       - "8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     volumes:
       - app_data:/app/data
       - app_test_data:/app/test-data
@@ -27,7 +33,8 @@ services:
     environment:
       HAA_TESTING_API_URL: http://aggregation:8081
     depends_on:
-      - aggregation
+      aggregation:
+        condition: service_healthy
     ports:
       - "3000:3000"
     volumes:

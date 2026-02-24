@@ -1,7 +1,5 @@
 """Path resolution utilities for runtime contracts."""
 
-from __future__ import annotations
-
 import importlib.resources
 import os
 from pathlib import Path
@@ -53,7 +51,10 @@ def test_data_root() -> Path:
     """Return test data root using TEST_DATA_DIR override when set."""
     override = os.getenv("TEST_DATA_DIR", "").strip()
     if override:
-        return Path(override).resolve()
+        override_path = Path(override).resolve()
+        if not override_path.exists() or not override_path.is_dir():
+            raise RuntimeError(f"TEST_DATA_DIR does not exist or is not a directory: {override_path}")
+        return override_path
     return repository_root() / "test-data"
 
 

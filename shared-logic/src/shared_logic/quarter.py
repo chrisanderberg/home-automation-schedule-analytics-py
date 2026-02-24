@@ -23,8 +23,9 @@ def split_interval_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
     cur = start_ms
     while cur < end_ms:
         dt = datetime.fromtimestamp(cur / 1000, tz=UTC)
-        q_idx = quarter_index_utc(cur)
-        next_q_month = (((dt.month - 1) // 3) + 1) * 3 + 1
+        quarter_number = ((dt.month - 1) // 3) + 1
+        q_idx = (dt.year - 1970) * 4 + (quarter_number - 1)
+        next_q_month = (quarter_number * 3) + 1
         year = dt.year
         if next_q_month == 13:
             next_q_month = 1

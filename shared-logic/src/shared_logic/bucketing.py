@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 from .blob import BUCKETS_PER_DAY
@@ -46,10 +47,10 @@ def _next_boundary_local(timestamp_ms: int, time_zone: str) -> int:
     dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=tz)
     minute = ((dt.minute // 5) + 1) * 5
     if minute >= 60:
-        naive = dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        boundary_dt = dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     else:
-        naive = dt.replace(minute=minute, second=0, microsecond=0)
-    boundary_ms = int(naive.timestamp() * 1000)
+        boundary_dt = dt.replace(minute=minute, second=0, microsecond=0)
+    boundary_ms = int(boundary_dt.timestamp() * 1000)
     if boundary_ms <= timestamp_ms:
         return timestamp_ms + BUCKET_MS
     return boundary_ms
@@ -155,7 +156,9 @@ def _sunrise_sunset_solar_minutes(day: datetime, latitude: float) -> tuple[float
     return sunrise, sunset
 
 
-def _split_interval_with_offset(start_ms: int, end_ms: int, offset_minutes_func) -> list[BucketSpan]:
+def _split_interval_with_offset(
+    start_ms: int, end_ms: int, offset_minutes_func: Callable[[int], float]
+) -> list[BucketSpan]:
     if end_ms <= start_ms:
         raise ValueError("invalid interval")
     spans: list[BucketSpan] = []
@@ -231,17 +234,51 @@ def bucket_at_unequal_hours(timestamp_ms: int, latitude: float, longitude: float
     return day_index * BUCKETS_PER_DAY + bucket_within_day
 
 
+def _bucket_at_unequal_hours_unchecked(timestamp_ms: int, latitude: float, longitude: float) -> int:
+    dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
+    offset_minutes = longitude * 4 + _equation_of_time_minutes(dt)
+    adj = dt + timedelta(minutes=offset_minutes)
+
+    day_start = datetime(adj.year, adj.month, adj.day, tzinfo=UTC)
+    solar_minutes = (adj - day_start).total_seconds() / 60
+    if solar_minutes < 0:
+        solar_minutes += 1440
+
+    sunrise, sunset = _sunrise_sunset_solar_minutes(day_start, latitude)
+    day_length = sunset - sunrise
+    night_length = 1440 - day_length
+    if day_length <= 0 or night_length <= 0:
+        raise UndefinedClockError("clock mapping undefined")
+
+    if sunrise <= solar_minutes < sunset:
+        day_fraction = (solar_minutes - sunrise) / day_length
+        pseudo_minutes = 360 + day_fraction * 720
+    else:
+        if solar_minutes >= sunset:
+            night_fraction = (solar_minutes - sunset) / night_length
+        else:
+            night_fraction = (solar_minutes + 1440 - sunset) / night_length
+        pseudo_minutes = 1080 + night_fraction * 720
+        if pseudo_minutes >= 1440:
+            pseudo_minutes -= 1440
+
+    bucket_within_day = int(pseudo_minutes) // 5
+    day_index = adj.weekday()
+    return day_index * BUCKETS_PER_DAY + bucket_within_day
+
+
 def _next_unequal_boundary(timestamp_ms: int, latitude: float, longitude: float) -> int:
-    start_bucket = bucket_at_unequal_hours(timestamp_ms, latitude, longitude)
+    _validate_coordinates(latitude, longitude)
+    start_bucket = _bucket_at_unequal_hours_unchecked(timestamp_ms, latitude, longitude)
     low = timestamp_ms
     probe = timestamp_ms + 60 * 1000
     for _ in range(400):
-        probe_bucket = bucket_at_unequal_hours(probe, latitude, longitude)
+        probe_bucket = _bucket_at_unequal_hours_unchecked(probe, latitude, longitude)
         if probe_bucket != start_bucket:
             hi = probe
             while hi - low > 1:
                 mid = low + ((hi - low) // 2)
-                mid_bucket = bucket_at_unequal_hours(mid, latitude, longitude)
+                mid_bucket = _bucket_at_unequal_hours_unchecked(mid, latitude, longitude)
                 if mid_bucket == start_bucket:
                     low = mid
                 else:
@@ -251,7 +288,7 @@ def _next_unequal_boundary(timestamp_ms: int, latitude: float, longitude: float)
             return hi
         low = probe
         probe += 60 * 1000
-    raise ValueError("invalid interval")
+    raise ValueError("could not locate next bucket boundary within probe limit")
 
 
 def split_interval_mean_solar(start_ms: int, end_ms: int, latitude: float, longitude: float) -> list[BucketSpan]:

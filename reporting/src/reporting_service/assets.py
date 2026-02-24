@@ -65,11 +65,16 @@ def _post_json(url: str, payload: dict) -> tuple[int, dict]:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             body = resp.read().decode("utf-8")
-            parsed = decode_json_body(body, decode_error_as_error_payload=False)
+            try:
+                parsed_any = decode_json_body(body, decode_error_as_error_payload=False)
+            except ValueError:
+                parsed_any = {}
+            parsed = parsed_any if isinstance(parsed_any, dict) else {"error": f"unexpected payload type: {type(parsed_any).__name__}"}
             return resp.status, parsed
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8") if exc.fp is not None else ""
-        parsed = decode_json_body(body, decode_error_as_error_payload=True)
+        parsed_any = decode_json_body(body, decode_error_as_error_payload=True)
+        parsed = parsed_any if isinstance(parsed_any, dict) else {"error": f"unexpected payload type: {type(parsed_any).__name__}"}
         return exc.code, parsed
 
 
@@ -82,7 +87,7 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
     try:
         snapshot_path = snapshot_path_fn()
     except RuntimeError as exc:
-        context.log.warning(str(exc))
+        context.log.warning("snapshot lookup failed for %s: %s", label, exc)
         return MaterializeResult(metadata={"snapshot_missing": True})
 
     context.log.info("using %s snapshot %s", label, snapshot_path)
@@ -200,7 +205,10 @@ def snapshot_sensor(context: SensorEvaluationContext):
         return SkipReason(str(exc))
 
     mtime_ns = snapshot_path.stat().st_mtime_ns
-    last_seen = int(context.cursor) if context.cursor else -1
+    try:
+        last_seen = int(context.cursor) if context.cursor else -1
+    except ValueError:
+        last_seen = -1
     if mtime_ns <= last_seen:
         return SkipReason("no new snapshot")
 

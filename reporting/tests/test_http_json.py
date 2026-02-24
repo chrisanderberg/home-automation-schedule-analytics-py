@@ -14,6 +14,19 @@ class HttpJsonTests(unittest.TestCase):
         # Verifies invalid JSON can be surfaced as an error payload when requested.
         self.assertEqual(decode_json_body("not-json", decode_error_as_error_payload=True), {"error": "not-json"})
 
+    def test_decode_invalid_raises_when_error_payload_disabled(self):
+        # Verifies invalid JSON is not silently swallowed when decode_error_as_error_payload is False.
+        with self.assertRaises(ValueError):
+            decode_json_body("not-json", decode_error_as_error_payload=False)
+
+    def test_decode_non_object_json(self):
+        # Verifies valid non-object JSON values are preserved.
+        self.assertEqual(decode_json_body("[1,2]", decode_error_as_error_payload=False), [1, 2])
+
+    def test_decode_empty_body_as_error_payload(self):
+        # Verifies empty body returns explicit error payload when requested.
+        self.assertEqual(decode_json_body("", decode_error_as_error_payload=True), {"error": ""})
+
 
 if __name__ == "__main__":
     unittest.main()
