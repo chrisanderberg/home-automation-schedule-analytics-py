@@ -7,6 +7,7 @@ import os
 import signal
 import threading
 import time
+from errno import EADDRINUSE
 from dataclasses import dataclass
 from typing import Any
 
@@ -158,17 +159,15 @@ def _load_config() -> Config:
     return Config(time_zone=time_zone, latitude=latitude, longitude=longitude)
 
 
-def run() -> int:
-    """Start both APIs and block until shutdown.
+def _load_ports() -> tuple[int, int]:
+    """Load and validate main/testing port configuration.
 
     Args:
         None.
 
     Returns:
-        Process exit code (`0` on normal shutdown).
+        Tuple `(main_port, testing_port)`.
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    cfg = _load_config()
     main_port_raw = os.getenv("HAA_MAIN_PORT", "8080")
     testing_port_raw = os.getenv("HAA_TESTING_PORT", "8081")
     try:
@@ -183,8 +182,49 @@ def run() -> int:
         raise ConfigurationError(f"invalid HAA_TESTING_PORT value: {testing_port_raw!r}") from exc
     if not (1 <= testing_port <= 65535):
         raise ConfigurationError(f"invalid HAA_TESTING_PORT value: {testing_port!r} (must be 1-65535)")
+    if main_port == testing_port:
+        raise ConfigurationError(
+            f"HAA_MAIN_PORT and HAA_TESTING_PORT must differ (both were {main_port})"
+        )
+    return main_port, testing_port
 
-    controller = ServerController(cfg, main_port=main_port, testing_port=testing_port)
+
+def _create_server_controller(cfg: Config, *, main_port: int, testing_port: int) -> ServerController:
+    """Create a dual-server controller with explicit bind failure messaging.
+
+    Args:
+        cfg: Runtime configuration shared by both servers.
+        main_port: Port for the main API server.
+        testing_port: Port for the testing API server.
+
+    Returns:
+        Constructed `ServerController`.
+    """
+    try:
+        return ServerController(cfg, main_port=main_port, testing_port=testing_port)
+    except OSError as exc:
+        if exc.errno == EADDRINUSE:
+            raise ConfigurationError(
+                f"failed to bind API ports (main={main_port}, testing={testing_port}): address already in use"
+            ) from exc
+        raise ConfigurationError(
+            f"failed to bind API ports (main={main_port}, testing={testing_port}): {exc}"
+        ) from exc
+
+
+def run() -> int:
+    """Start both APIs and block until shutdown.
+
+    Args:
+        None.
+
+    Returns:
+        Process exit code (`0` on normal shutdown).
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    cfg = _load_config()
+    main_port, testing_port = _load_ports()
+    controller = _create_server_controller(cfg, main_port=main_port, testing_port=testing_port)
 
     def _handle_signal(_signum, _frame):
         """Handle SIGINT/SIGTERM by requesting coordinated shutdown.

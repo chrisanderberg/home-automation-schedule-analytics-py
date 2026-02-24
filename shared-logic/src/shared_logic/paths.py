@@ -1,6 +1,5 @@
 """Path resolution utilities for runtime contracts."""
 
-import importlib.resources
 import os
 from pathlib import Path
 
@@ -14,7 +13,7 @@ def _find_repo_root_from(start: Path) -> Path | None:
     Returns:
         Repository root path when found, otherwise `None`.
     """
-    for parent in start.parents:
+    for parent in (start, *start.parents):
         has_repo_dirs = (parent / "aggregation").is_dir() and (parent / "shared-logic").is_dir()
         has_sentinel = (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file()
         if has_repo_dirs and has_sentinel:
@@ -24,25 +23,11 @@ def _find_repo_root_from(start: Path) -> Path | None:
 
 def repository_root() -> Path:
     """Locate repository root from this module path."""
-    here = Path(__file__).resolve()
-    found = _find_repo_root_from(here)
-    if found is not None:
-        return found
-
-    package_ref: Path | None = None
-    if getattr(importlib.resources, "files", None) is not None and __package__ is not None:
-        try:
-            traversable = importlib.resources.files(__name__)
-            if getattr(traversable, "is_dir", None) is not None and traversable.is_dir():
-                with importlib.resources.as_file(traversable) as resolved_dir:
-                    package_ref = resolved_dir.resolve()
-                    found = _find_repo_root_from(package_ref)
-                    if found is not None:
-                        return found
-        except Exception:
-            package_ref = None
-
-    raise RuntimeError(f"repository root not found from {here} (package_ref={package_ref})")
+    for start in (Path(__file__).resolve(), Path.cwd().resolve()):
+        found = _find_repo_root_from(start)
+        if found is not None:
+            return found
+    raise RuntimeError("repository root not found from module path or current working directory")
 
 
 def data_root() -> Path:

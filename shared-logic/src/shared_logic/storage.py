@@ -101,71 +101,10 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
         conn.execute("COMMIT")
     except Exception:
         logger.exception("migration failed during aggregates fk migration")
-        rollback_succeeded = False
         try:
             conn.execute("ROLLBACK")
-            rollback_succeeded = True
         except Exception:
             logger.exception("rollback failed during aggregates fk migration")
-        try:
-            aggregates_exists = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates'"
-            ).fetchone() is not None
-            aggregates_old_exists = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates_old'"
-            ).fetchone() is not None
-            aggregates_row_count = 0
-            has_expected_schema = False
-            if aggregates_exists:
-                aggregates_row_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
-                cols = conn.execute("PRAGMA table_info(aggregates)").fetchall()
-                fk_rows = conn.execute("PRAGMA foreign_key_list(aggregates)").fetchall()
-                has_expected_columns = [row[1] for row in cols] == [
-                    "control_id",
-                    "model_id",
-                    "quarter_index",
-                    "blob",
-                ]
-                has_expected_fk = any(row[2] == "controls" and row[3] == "control_id" and row[4] == "control_id" for row in fk_rows)
-                has_expected_schema = has_expected_columns and has_expected_fk
-
-            if not aggregates_old_exists:
-                logger.warning(
-                    "no aggregates_old table found during migration failure cleanup "
-                    "(rollback_succeeded=%s, aggregates_old_exists=%s); prior rollback may have undone rename",
-                    rollback_succeeded,
-                    aggregates_old_exists,
-                )
-            elif rollback_succeeded and aggregates_exists and has_expected_schema:
-                conn.execute("DROP TABLE aggregates_old")
-                logger.warning(
-                    "dropped aggregates_old after failed migration because aggregates appears valid "
-                    "(rows=%d, expected_schema=%s)",
-                    aggregates_row_count,
-                    has_expected_schema,
-                )
-            else:
-                logger.warning(
-                    "preserving aggregates_old after failed migration "
-                    "(rollback_succeeded=%s, aggregates_exists=%s, rows=%d, expected_schema=%s)",
-                    rollback_succeeded,
-                    aggregates_exists,
-                    aggregates_row_count,
-                    has_expected_schema,
-                )
-                should_restore = aggregates_exists and aggregates_row_count > 0 and not has_expected_schema
-                if should_restore:
-                    conn.execute("BEGIN IMMEDIATE")
-                    try:
-                        conn.execute("DROP TABLE aggregates")
-                        conn.execute("ALTER TABLE aggregates_old RENAME TO aggregates")
-                        conn.execute("COMMIT")
-                    except Exception:
-                        conn.execute("ROLLBACK")
-                        raise
-                    logger.warning("restored aggregates from aggregates_old after migration failure")
-        except Exception:
-            logger.exception("cleanup failed while preserving/restoring aggregates_old after migration failure")
         raise
 
 

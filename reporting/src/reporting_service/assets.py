@@ -10,6 +10,7 @@ from pathlib import Path
 
 from dagster import (
     AssetExecutionContext,
+    Failure,
     MaterializeResult,
     RunRequest,
     SensorEvaluationContext,
@@ -159,8 +160,11 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
     try:
         snapshot_path = snapshot_path_fn()
     except RuntimeError as exc:
-        context.log.warning("snapshot lookup failed for %s: %s", label, exc)
-        return MaterializeResult(metadata={"snapshot_missing": True})
+        context.log.error("snapshot lookup failed for %s: %s", label, exc)
+        raise Failure(
+            description=f"snapshot lookup failed for {label}: {exc}",
+            metadata={"snapshot_missing": True, "target": label},
+        ) from exc
 
     context.log.info("using %s snapshot %s", label, snapshot_path)
 
@@ -264,8 +268,8 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
         _require_status(status, 200, "snapshot export", payload)
     except urllib.error.URLError as exc:
         message = f"testing API unavailable at {base_url}: {exc}"
-        context.log.warning(message)
-        return MaterializeResult(metadata={"snapshot_missing": True, "error": message})
+        context.log.error(message)
+        raise Failure(description=message, metadata={"snapshot_missing": True, "error": message}) from exc
 
     snapshot_path_raw = None
     for key in ("snapshotPath", "snapshot_path", "path", "filename"):

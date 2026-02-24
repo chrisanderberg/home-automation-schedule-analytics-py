@@ -18,7 +18,7 @@ setup-dev:
 	$(PYTHON) -m pip install -e '.[dev]'
 
 check-test-deps:
-	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "import flask; from aggregation_service.jsonio import decode_strict_json; from reporting_service.http_json import decode_json_body" >/dev/null 2>&1 || (echo "Missing dependency or import path. Run 'make setup' first."; exit 1)
+	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "import flask, dagster; from aggregation_service.jsonio import decode_strict_json; from reporting_service.http_json import decode_json_body" >/dev/null 2>&1 || (echo "Missing dependency or import path. Run 'make setup' first."; exit 1)
 
 test: check-test-deps
 	@set +e; \

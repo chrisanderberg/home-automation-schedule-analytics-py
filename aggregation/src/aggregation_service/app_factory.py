@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -204,6 +205,36 @@ def _test_db_path(test_name: str) -> Path:
     return test_data_root() / f"{test_name}-test-data.sqlite"
 
 
+def _with_test_db(test_name: str, fn: Callable[[Any], Any]) -> Any:
+    """Open/close a test DB connection around one operation."""
+    conn, _ = _open_test_db(test_name)
+    try:
+        return fn(conn)
+    finally:
+        conn.close()
+
+
+def _handle_request(
+    app: Flask,
+    action: Callable[[], Any],
+    *,
+    log_message: str,
+    bad_request_error: str | None = "invalid json",
+    internal_error: str = "internal server error",
+) -> Any:
+    """Execute one request handler with consistent error mapping."""
+    try:
+        return action()
+    except BadRequestError as exc:
+        message = bad_request_error if bad_request_error is not None else str(exc)
+        return jsonify({"error": message}), 400
+    except ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:  # pragma: no cover - defensive API surface
+        app.logger.exception("%s: %s", log_message, exc)
+        return jsonify({"error": internal_error}), 500
+
+
 def create_main_app(cfg: Config) -> Flask:
     """Create main API application bound to production DB path."""
     app = Flask("aggregation-main")
@@ -264,7 +295,7 @@ def create_main_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(
                 request,
                 required=["controlId", "controlType", "numStates"],
@@ -274,13 +305,8 @@ def create_main_app(cfg: Config) -> Flask:
             conn = _get_conn()
             upsert_control(conn, control)
             return jsonify({"status": "accepted"}), 202
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("controls endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="controls endpoint failed")
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
@@ -292,7 +318,7 @@ def create_main_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(
                 request,
                 required=["controlId", "modelId", "state", "startTimeMs", "endTimeMs"],
@@ -301,13 +327,8 @@ def create_main_app(cfg: Config) -> Flask:
             conn = _get_conn()
             ingest_holding(conn, cfg, input_data)
             return jsonify({"status": "accepted"}), 202
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("holding_intervals endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="holding_intervals endpoint failed")
 
     @app.post("/v1/transitions")
     def transitions():
@@ -319,7 +340,7 @@ def create_main_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(
                 request,
                 required=["controlId", "modelId", "fromState", "toState", "timestampMs"],
@@ -328,13 +349,8 @@ def create_main_app(cfg: Config) -> Flask:
             conn = _get_conn()
             ingest_transition(conn, cfg, input_data)
             return jsonify({"status": "accepted"}), 202
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("transitions endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="transitions endpoint failed")
 
     @app.post("/v1/snapshots")
     def snapshots():
@@ -346,16 +362,19 @@ def create_main_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with exported snapshot metadata.
         """
-        try:
+        def _action():
             decode_strict_json(request, required=[])
             conn = _get_conn()
             path = export_snapshot(conn)
             return jsonify({"snapshotPath": str(path)}), 200
-        except BadRequestError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("snapshot export failed: %s", exc)
-            return jsonify({"error": "snapshot export failed"}), 500
+
+        return _handle_request(
+            app,
+            _action,
+            log_message="snapshot export failed",
+            bad_request_error=None,
+            internal_error="snapshot export failed",
+        )
 
     return app
 
@@ -386,26 +405,19 @@ def create_testing_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(
                 request,
                 required=["testName", "controlId", "controlType", "numStates"],
                 optional=["stateLabels"],
             )
             control, test_name = _validate_control_payload(payload, require_test_name=True)
-            conn, _ = _open_test_db(test_name)
-            try:
+            def _write(conn):
                 upsert_control(conn, control)
-            finally:
-                conn.close()
+            _with_test_db(test_name, _write)
             return jsonify({"status": "accepted"}), 202
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("testing controls endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="testing controls endpoint failed")
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
@@ -417,25 +429,18 @@ def create_testing_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(
                 request,
                 required=["testName", "controlId", "modelId", "state", "startTimeMs", "endTimeMs"],
             )
             input_data, test_name = _validate_holding_payload(payload, require_test_name=True)
-            conn, _ = _open_test_db(test_name)
-            try:
+            def _write(conn):
                 ingest_holding(conn, cfg, input_data)
-            finally:
-                conn.close()
+            _with_test_db(test_name, _write)
             return jsonify({"status": "accepted"}), 202
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("testing holding_intervals endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="testing holding_intervals endpoint failed")
 
     @app.post("/v1/transitions")
     def transitions():
@@ -447,25 +452,18 @@ def create_testing_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(
                 request,
                 required=["testName", "controlId", "modelId", "fromState", "toState", "timestampMs"],
             )
             input_data, test_name = _validate_transition_payload(payload, require_test_name=True)
-            conn, _ = _open_test_db(test_name)
-            try:
+            def _write(conn):
                 ingest_transition(conn, cfg, input_data)
-            finally:
-                conn.close()
+            _with_test_db(test_name, _write)
             return jsonify({"status": "accepted"}), 202
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("testing transitions endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="testing transitions endpoint failed")
 
     @app.post("/v1/snapshots")
     def snapshots():
@@ -477,7 +475,7 @@ def create_testing_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with snapshot metadata.
         """
-        try:
+        def _action():
             payload = decode_strict_json(request, required=["testName", "snapshotName"])
             test_name = payload["testName"]
             snapshot_name = payload["snapshotName"]
@@ -485,19 +483,18 @@ def create_testing_app(cfg: Config) -> Flask:
                 raise ValidationError("invalid testName")
             if not isinstance(snapshot_name, str) or not is_valid_slug(snapshot_name):
                 raise ValidationError("invalid snapshotName")
-            conn, _ = _open_test_db(test_name)
-            try:
+            def _write(conn):
                 path = export_snapshot_for_test(conn, test_name, snapshot_name)
-            finally:
-                conn.close()
+                return path
+            path = _with_test_db(test_name, _write)
             return jsonify({"snapshotName": snapshot_name, "snapshotPath": str(path)}), 200
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("snapshot export failed for testing api: %s", exc)
-            return jsonify({"error": "snapshot export failed"}), 500
+
+        return _handle_request(
+            app,
+            _action,
+            log_message="snapshot export failed for testing api",
+            internal_error="snapshot export failed",
+        )
 
     @app.post("/v1/reset")
     def reset():
@@ -509,7 +506,7 @@ def create_testing_app(cfg: Config) -> Flask:
         Returns:
             Flask response tuple with JSON payload and HTTP status.
         """
-        try:
+        def _action():
             payload = decode_strict_json(request, required=["testName"])
             test_name = payload["testName"]
             if not isinstance(test_name, str) or not is_valid_slug(test_name):
@@ -517,12 +514,7 @@ def create_testing_app(cfg: Config) -> Flask:
             db_path = _test_db_path(test_name)
             reset_test_db_files(db_path)
             return jsonify({"status": "ok"}), 200
-        except BadRequestError:
-            return jsonify({"error": "invalid json"}), 400
-        except ValidationError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except Exception as exc:  # pragma: no cover - defensive API surface
-            app.logger.exception("testing reset endpoint failed: %s", exc)
-            return jsonify({"error": "internal server error"}), 500
+
+        return _handle_request(app, _action, log_message="testing reset endpoint failed")
 
     return app

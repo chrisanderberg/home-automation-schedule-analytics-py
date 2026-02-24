@@ -14,14 +14,11 @@ class BadRequestError(ValueError):
 
 def decode_strict_json(request: Request, required: Iterable[str], optional: Iterable[str] = ()) -> dict[str, Any]:
     """Decode JSON object and reject unknown or missing fields."""
-    if not request.is_json:
-        probe = request.get_json(force=True, silent=True)
-        if probe is None:
-            raise BadRequestError("Content-Type must be application/json")
-    try:
-        data = request.get_json(force=True)
-    except Exception as exc:  # pragma: no cover - flask parser differences
-        raise BadRequestError("invalid json body") from exc
+    data = request.get_json(silent=True)
+    if data is None:
+        if request.is_json:
+            raise BadRequestError("invalid json body")
+        raise BadRequestError("Content-Type must be application/json")
     if not isinstance(data, dict):
         raise BadRequestError("JSON payload must be an object")
 
