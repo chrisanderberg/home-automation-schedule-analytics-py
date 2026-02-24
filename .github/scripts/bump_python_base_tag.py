@@ -6,10 +6,11 @@ from __future__ import annotations
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
-FROM_PATTERN = re.compile(r"^FROM\s+python:(\d+)\.(\d+)\.(\d+)-slim\s*$", re.MULTILINE)
+FROM_PATTERN = re.compile(r"^(FROM\s+python:)(\d+)\.(\d+)\.(\d+)(-slim(?:[^\r\n]*)?)$", re.MULTILINE)
 TAG_PATTERN_TEMPLATE = r"^{major}\.{minor}\.(\d+)-slim$"
 TAGS_API = "https://registry.hub.docker.com/v2/repositories/library/python/tags?page_size=100"
 
@@ -19,9 +20,9 @@ def _read_dockerfile(path: Path) -> tuple[str, int, int, int]:
     match = FROM_PATTERN.search(text)
     if match is None:
         raise ValueError(f"no python base image tag found in {path}")
-    major = int(match.group(1))
-    minor = int(match.group(2))
-    patch = int(match.group(3))
+    major = int(match.group(2))
+    minor = int(match.group(3))
+    patch = int(match.group(4))
     return text, major, minor, patch
 
 
@@ -32,8 +33,21 @@ def _fetch_latest_patch(major: int, minor: int) -> int:
 
     while next_url:
         req = urllib.request.Request(next_url, headers={"User-Agent": "codex-python-base-bumper"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace").strip()
+            except Exception:
+                body = ""
+            details = f"HTTP {exc.code} {exc.reason}"
+            if body:
+                details = f"{details}; body: {body}"
+            raise RuntimeError(f"failed to fetch Docker Hub tags from {next_url}: {details}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"failed to fetch Docker Hub tags from {next_url}: {exc.reason}") from exc
 
         for result in payload.get("results", []):
             name = result.get("name", "")
@@ -50,7 +64,7 @@ def _fetch_latest_patch(major: int, minor: int) -> int:
 
 
 def _write_updated_dockerfile(path: Path, text: str, major: int, minor: int, patch: int) -> None:
-    replacement = f"FROM python:{major}.{minor}.{patch}-slim"
+    replacement = rf"\g<1>{major}.{minor}.{patch}\g<5>"
     updated_text, count = FROM_PATTERN.subn(replacement, text, count=1)
     if count != 1:
         raise RuntimeError(f"failed to replace FROM line in {path}")
@@ -62,9 +76,13 @@ def main() -> int:
         print("usage: bump_python_base_tag.py <dockerfile-path>")
         return 2
 
-    dockerfile = Path(sys.argv[1]).resolve()
-    text, major, minor, current_patch = _read_dockerfile(dockerfile)
-    latest_patch = _fetch_latest_patch(major, minor)
+    try:
+        dockerfile = Path(sys.argv[1]).resolve()
+        text, major, minor, current_patch = _read_dockerfile(dockerfile)
+        latest_patch = _fetch_latest_patch(major, minor)
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
     if latest_patch == current_patch:
         print(f"{dockerfile}: already up to date at {major}.{minor}.{current_patch}")

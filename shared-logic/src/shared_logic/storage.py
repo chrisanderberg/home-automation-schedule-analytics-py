@@ -101,14 +101,57 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
         conn.execute("COMMIT")
     except Exception:
         logger.exception("migration failed during aggregates fk migration")
+        rollback_succeeded = False
         try:
             conn.execute("ROLLBACK")
+            rollback_succeeded = True
         except Exception:
             logger.exception("rollback failed during aggregates fk migration")
         try:
-            conn.execute("DROP TABLE IF EXISTS aggregates_old")
+            aggregates_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates'"
+            ).fetchone() is not None
+            aggregates_old_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='aggregates_old'"
+            ).fetchone() is not None
+            aggregates_row_count = 0
+            has_expected_schema = False
+            if aggregates_exists:
+                aggregates_row_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
+                cols = conn.execute("PRAGMA table_info(aggregates)").fetchall()
+                has_expected_schema = [row[1] for row in cols] == [
+                    "control_id",
+                    "model_id",
+                    "quarter_index",
+                    "blob",
+                ]
+
+            if not aggregates_old_exists:
+                logger.warning("no aggregates_old table found during migration failure cleanup")
+            elif rollback_succeeded and aggregates_exists and (aggregates_row_count > 0 or has_expected_schema):
+                conn.execute("DROP TABLE aggregates_old")
+                logger.warning(
+                    "dropped aggregates_old after failed migration because aggregates appears valid "
+                    "(rows=%d, expected_schema=%s)",
+                    aggregates_row_count,
+                    has_expected_schema,
+                )
+            else:
+                logger.warning(
+                    "preserving aggregates_old after failed migration "
+                    "(rollback_succeeded=%s, aggregates_exists=%s, rows=%d, expected_schema=%s)",
+                    rollback_succeeded,
+                    aggregates_exists,
+                    aggregates_row_count,
+                    has_expected_schema,
+                )
+                if not aggregates_exists or aggregates_row_count == 0:
+                    if aggregates_exists:
+                        conn.execute("DROP TABLE aggregates")
+                    conn.execute("ALTER TABLE aggregates_old RENAME TO aggregates")
+                    logger.warning("restored aggregates from aggregates_old after migration failure")
         except Exception:
-            logger.exception("cleanup failed while dropping stale aggregates_old")
+            logger.exception("cleanup failed while preserving/restoring aggregates_old after migration failure")
         raise
 
 

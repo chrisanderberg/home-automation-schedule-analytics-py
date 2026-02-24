@@ -20,8 +20,9 @@ jobs:
         run: python .github/scripts/bump_python_base_tag.py aggregation/Dockerfile
 
       - name: Create pull request for base image updates
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           branch: codex/aggregation-python-base-bump
           title: "chore(aggregation): bump Python base image patch version"
           commit-message: "chore(aggregation): bump Python base image patch version"

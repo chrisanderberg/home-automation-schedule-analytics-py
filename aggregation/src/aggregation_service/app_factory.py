@@ -405,7 +405,7 @@ def create_testing_app(cfg: Config) -> Flask:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
             app.logger.exception("testing controls endpoint failed: %s", exc)
-            return jsonify({"error": str(exc)}), 500
+            return jsonify({"error": "internal server error"}), 500
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
@@ -435,7 +435,7 @@ def create_testing_app(cfg: Config) -> Flask:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
             app.logger.exception("testing holding_intervals endpoint failed: %s", exc)
-            return jsonify({"error": str(exc)}), 500
+            return jsonify({"error": "internal server error"}), 500
 
     @app.post("/v1/transitions")
     def transitions():
@@ -465,7 +465,7 @@ def create_testing_app(cfg: Config) -> Flask:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
             app.logger.exception("testing transitions endpoint failed: %s", exc)
-            return jsonify({"error": str(exc)}), 500
+            return jsonify({"error": "internal server error"}), 500
 
     @app.post("/v1/snapshots")
     def snapshots():
@@ -523,6 +523,6 @@ def create_testing_app(cfg: Config) -> Flask:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:  # pragma: no cover - defensive API surface
             app.logger.exception("testing reset endpoint failed: %s", exc)
-            return jsonify({"error": str(exc)}), 500
+            return jsonify({"error": "internal server error"}), 500
 
     return app
