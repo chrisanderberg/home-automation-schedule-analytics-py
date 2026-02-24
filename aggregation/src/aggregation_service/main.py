@@ -38,6 +38,16 @@ class ServerController:
     """Start and stop both API servers together."""
 
     def __init__(self, cfg: Config, main_port: int = 8080, testing_port: int = 8081):
+        """Create both WSGI servers and thread wrappers.
+
+        Args:
+            cfg: Runtime clock/location configuration shared by both apps.
+            main_port: Port for the main API server.
+            testing_port: Port for the testing API server.
+
+        Returns:
+            None.
+        """
         self._stop = threading.Event()
         self._shutdown_lock = threading.Lock()
         self._shutdown_started = False
@@ -57,13 +67,37 @@ class ServerController:
         ]
 
     def start(self) -> None:
+        """Start both server threads.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         for item in self.threads:
             item.thread.start()
 
     def request_stop(self) -> None:
+        """Signal the run loop to stop.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         self._stop.set()
 
     def should_run(self) -> bool:
+        """Check whether servers should keep running.
+
+        Args:
+            None.
+
+        Returns:
+            `True` when no stop was requested and both threads are alive.
+        """
         if self._stop.is_set():
             return False
         for item in self.threads:
@@ -74,6 +108,14 @@ class ServerController:
         return True
 
     def stop(self) -> None:
+        """Shut down both servers and join their threads.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         with self._shutdown_lock:
             if self._shutdown_started:
                 return
@@ -88,6 +130,14 @@ class ServerController:
 
 
 def _load_config() -> Config:
+    """Load and validate runtime configuration from environment variables.
+
+    Args:
+        None.
+
+    Returns:
+        Parsed `Config` object for ingestion clock calculations.
+    """
     time_zone = os.getenv("HAA_TIMEZONE", "UTC")
     missing = [name for name in ("HAA_LATITUDE", "HAA_LONGITUDE") if not os.getenv(name)]
     if missing:
@@ -106,6 +156,14 @@ def _load_config() -> Config:
 
 
 def run() -> int:
+    """Start both APIs and block until shutdown.
+
+    Args:
+        None.
+
+    Returns:
+        Process exit code (`0` on normal shutdown).
+    """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = _load_config()
     main_port_raw = os.getenv("HAA_MAIN_PORT", "8080")
@@ -122,6 +180,15 @@ def run() -> int:
     controller = ServerController(cfg, main_port=main_port, testing_port=testing_port)
 
     def _handle_signal(_signum, _frame):
+        """Handle SIGINT/SIGTERM by requesting coordinated shutdown.
+
+        Args:
+            _signum: Signal number provided by Python signal handler.
+            _frame: Current execution frame (unused).
+
+        Returns:
+            None.
+        """
         controller.request_stop()
 
     signal.signal(signal.SIGINT, _handle_signal)

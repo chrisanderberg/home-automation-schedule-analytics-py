@@ -6,6 +6,14 @@ from pathlib import Path
 
 
 def _find_repo_root_from(start: Path) -> Path | None:
+    """Walk upward from a path and locate repository root if present.
+
+    Args:
+        start: File or directory path used as search starting point.
+
+    Returns:
+        Repository root path when found, otherwise `None`.
+    """
     for parent in start.parents:
         has_repo_dirs = (parent / "aggregation").is_dir() and (parent / "shared-logic").is_dir()
         has_sentinel = (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file()

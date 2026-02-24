@@ -21,6 +21,15 @@ class Blob:
     """Mutable dense u64 blob with canonical N^2 * GROUP_SIZE layout."""
 
     def __init__(self, num_states: int, data: bytes | bytearray | None = None) -> None:
+        """Create a dense mutable blob for aggregate counters.
+
+        Args:
+            num_states: Number of control states used to size the blob.
+            data: Optional existing raw bytes to initialize from.
+
+        Returns:
+            None.
+        """
         if num_states < MIN_STATES or num_states > MAX_STATES:
             raise ValueError("invalid num_states")
         self.num_states = num_states

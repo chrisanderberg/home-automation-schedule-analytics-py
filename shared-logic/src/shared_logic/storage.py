@@ -141,6 +141,14 @@ def get_control(conn: sqlite3.Connection, control_id: str) -> Control:
 
 
 def _expected_blob_length(num_states: int) -> int:
+    """Compute expected aggregate blob byte length for a state count.
+
+    Args:
+        num_states: Number of states configured for the control.
+
+    Returns:
+        Expected blob size in bytes.
+    """
     return num_states * num_states * GROUP_SIZE * 8
 
 

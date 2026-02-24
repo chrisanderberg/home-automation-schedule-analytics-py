@@ -7,6 +7,14 @@ from pathlib import Path
 
 
 def _find_repo_root(start: Path) -> Path:
+    """Walk upward from a path to locate the repository root.
+
+    Args:
+        start: File or directory path to start searching from.
+
+    Returns:
+        Repository root path containing project sentinel files.
+    """
     for parent in (start, *start.parents):
         if (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file() or (parent / ".git").exists():
             return parent

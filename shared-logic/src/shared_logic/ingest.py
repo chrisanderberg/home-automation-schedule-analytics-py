@@ -33,6 +33,14 @@ from .storage import get_control, update_aggregate
 
 
 def _validate_holding(input_data: HoldingInput) -> None:
+    """Validate holding ingestion input fields.
+
+    Args:
+        input_data: Holding interval payload to validate.
+
+    Returns:
+        None.
+    """
     if not input_data.control_id or not input_data.model_id:
         raise ValidationError("invalid input")
     if input_data.state < 0:
@@ -42,6 +50,14 @@ def _validate_holding(input_data: HoldingInput) -> None:
 
 
 def _validate_transition(input_data: TransitionInput) -> None:
+    """Validate transition ingestion input fields.
+
+    Args:
+        input_data: Transition event payload to validate.
+
+    Returns:
+        None.
+    """
     if not input_data.control_id or not input_data.model_id:
         raise ValidationError("invalid input")
     if input_data.from_state < 0 or input_data.to_state < 0:
@@ -70,6 +86,16 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
         span_end = q_span.end_ms
 
         def _update(blob: Blob, span_start: int = span_start, span_end: int = span_end) -> None:
+            """Apply holding millis for one quarter span to all clock buckets.
+
+            Args:
+                blob: Aggregate blob to mutate.
+                span_start: Inclusive start time for the quarter sub-interval.
+                span_end: Exclusive end time for the quarter sub-interval.
+
+            Returns:
+                None.
+            """
             splitters = [
                 (CLOCK_UTC, lambda: split_interval_utc(span_start, span_end)),
                 (
@@ -125,6 +151,14 @@ def ingest_transition(conn: sqlite3.Connection, cfg: Config, input_data: Transit
     key = AggregateKey(control_id=input_data.control_id, model_id=input_data.model_id, quarter_index=q_idx)
 
     def _update(blob: Blob) -> None:
+        """Apply one transition count to each defined clock bucket.
+
+        Args:
+            blob: Aggregate blob to mutate.
+
+        Returns:
+            None.
+        """
         bucket_fns = [
             (CLOCK_UTC, lambda: bucket_at_utc(input_data.timestamp_ms)),
             (CLOCK_LOCAL, lambda: bucket_at_local(input_data.timestamp_ms, cfg.time_zone)),

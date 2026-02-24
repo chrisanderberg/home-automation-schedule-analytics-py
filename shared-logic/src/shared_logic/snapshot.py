@@ -30,6 +30,14 @@ def export_snapshot_for_test(conn: sqlite3.Connection, test_name: str, snapshot_
 
 
 def _cleanup_sidecars(path: Path) -> None:
+    """Delete SQLite sidecar files (`-wal`, `-shm`) for a base path.
+
+    Args:
+        path: Base database path whose sidecars should be removed.
+
+    Returns:
+        None.
+    """
     for ext in ("-wal", "-shm"):
         sidecar = path.with_name(path.name + ext)
         if sidecar.exists():
@@ -37,6 +45,15 @@ def _cleanup_sidecars(path: Path) -> None:
 
 
 def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
+    """Export a SQLite database to a destination path atomically.
+
+    Args:
+        conn: Open source SQLite connection to snapshot from.
+        out_path: Final destination path for the exported snapshot.
+
+    Returns:
+        Resolved path to the exported snapshot.
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = out_path.with_name(f"{out_path.name}.tmp-{uuid4().hex}")
     success = False
@@ -57,6 +74,15 @@ def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
 
 
 def _validate_name_component(value: str, label: str) -> str:
+    """Validate a snapshot/test name component used in filenames.
+
+    Args:
+        value: Candidate name component.
+        label: Field label used in error messages.
+
+    Returns:
+        Original `value` when valid.
+    """
     if not value:
         raise ValueError(f"{label} must be non-empty")
     if value in {".", ".."}:

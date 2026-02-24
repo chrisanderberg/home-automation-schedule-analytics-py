@@ -8,6 +8,14 @@ from .contracts import QuarterSpan
 
 
 def _quarter_index_from_dt(dt: datetime) -> int:
+    """Compute compact quarter index from a UTC datetime.
+
+    Args:
+        dt: UTC datetime inside the target quarter.
+
+    Returns:
+        Quarter index using `(year - 1970) * 4 + quarter_offset`.
+    """
     quarter_number = ((dt.month - 1) // 3) + 1
     return (dt.year - 1970) * 4 + (quarter_number - 1)
 

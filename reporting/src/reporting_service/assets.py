@@ -27,6 +27,14 @@ from shared_logic.paths import repository_root, snapshot_root, test_snapshot_roo
 
 
 def _latest_snapshot_path_in_dir(root: Path) -> Path:
+    """Return the newest `.sqlite` snapshot file from a directory.
+
+    Args:
+        root: Snapshot directory to scan.
+
+    Returns:
+        Path to the most recently modified snapshot file.
+    """
     if not root.exists() or not root.is_dir():
         raise RuntimeError(f"snapshot directory is not present: {root}")
     candidates = list(root.glob("*.sqlite"))
@@ -36,26 +44,75 @@ def _latest_snapshot_path_in_dir(root: Path) -> Path:
 
 
 def _latest_snapshot_path() -> Path:
+    """Resolve the newest production snapshot path.
+
+    Args:
+        None.
+
+    Returns:
+        Path to the newest production snapshot file.
+    """
     return _latest_snapshot_path_in_dir(snapshot_root())
 
 
 def _latest_testing_snapshot_path() -> Path:
+    """Resolve the newest testing snapshot path.
+
+    Args:
+        None.
+
+    Returns:
+        Path to the newest testing snapshot file.
+    """
     return _latest_snapshot_path_in_dir(test_snapshot_root())
 
 
 def _testing_api_base_url() -> str:
+    """Read testing API base URL from environment with default.
+
+    Args:
+        None.
+
+    Returns:
+        Base URL string without trailing slash.
+    """
     return os.getenv("HAA_TESTING_API_URL", "http://127.0.0.1:8081").rstrip("/")
 
 
 def _testing_flow_test_name() -> str:
+    """Read the configured test name for Dagster validation flow.
+
+    Args:
+        None.
+
+    Returns:
+        Test name slug string.
+    """
     return os.getenv("HAA_DAGSTER_TEST_NAME", "dagster-asset-flow")
 
 
 def _testing_flow_snapshot_name() -> str:
+    """Read the configured snapshot name for Dagster validation flow.
+
+    Args:
+        None.
+
+    Returns:
+        Snapshot name slug string.
+    """
     return os.getenv("HAA_DAGSTER_SNAPSHOT_NAME", "dagster-asset-flow")
 
 
 def _post_json(url: str, payload: dict) -> tuple[int, dict]:
+    """POST JSON and parse the response payload.
+
+    Args:
+        url: Endpoint URL to call.
+        payload: JSON-compatible dictionary request payload.
+
+    Returns:
+        Tuple of HTTP status code and parsed response dictionary.
+    """
     req = urllib.request.Request(
         url=url,
         data=json.dumps(payload).encode("utf-8"),
@@ -79,11 +136,32 @@ def _post_json(url: str, payload: dict) -> tuple[int, dict]:
 
 
 def _require_status(status: int, expected: int, step: str, payload: dict) -> None:
+    """Raise when an HTTP step does not return the expected status.
+
+    Args:
+        status: Actual response status code.
+        expected: Required status code for the step.
+        step: Human-readable step label.
+        payload: Response payload used in the error message.
+
+    Returns:
+        None.
+    """
     if status != expected:
         raise RuntimeError(f"{step} failed: expected {expected}, got {status}, payload={payload}")
 
 
 def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label: str) -> MaterializeResult:
+    """Read snapshot table counts and return Dagster metadata.
+
+    Args:
+        context: Dagster asset execution context for logging.
+        snapshot_path_fn: Callable that returns the target snapshot path.
+        label: Label used in logs and metadata context.
+
+    Returns:
+        `MaterializeResult` with path and row-count metadata.
+    """
     try:
         snapshot_path = snapshot_path_fn()
     except RuntimeError as exc:
@@ -110,16 +188,40 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
 
 @asset
 def snapshot_summary(context: AssetExecutionContext) -> MaterializeResult:
+    """Materialize metadata summary for the latest production snapshot.
+
+    Args:
+        context: Dagster asset execution context.
+
+    Returns:
+        `MaterializeResult` describing the latest production snapshot.
+    """
     return _summarize_snapshot(context, _latest_snapshot_path, "main")
 
 
 @asset
 def testing_snapshot_summary(context: AssetExecutionContext) -> MaterializeResult:
+    """Materialize metadata summary for the latest testing snapshot.
+
+    Args:
+        context: Dagster asset execution context.
+
+    Returns:
+        `MaterializeResult` describing the latest testing snapshot.
+    """
     return _summarize_snapshot(context, _latest_testing_snapshot_path, "testing")
 
 
 @asset
 def testing_api_snapshot_validation(context: AssetExecutionContext) -> MaterializeResult:
+    """Exercise testing API flow and validate exported snapshot contents.
+
+    Args:
+        context: Dagster asset execution context.
+
+    Returns:
+        `MaterializeResult` with validation metadata for the test snapshot.
+    """
     base_url = _testing_api_base_url()
     test_name = _testing_flow_test_name()
     snapshot_name = _testing_flow_snapshot_name()
@@ -199,6 +301,14 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
 
 @sensor(job_name="snapshot_job")
 def snapshot_sensor(context: SensorEvaluationContext):
+    """Trigger snapshot job when a newer production snapshot appears.
+
+    Args:
+        context: Dagster sensor evaluation context and cursor holder.
+
+    Returns:
+        `RunRequest` when new data exists, otherwise `SkipReason`.
+    """
     try:
         snapshot_path = _latest_snapshot_path()
     except RuntimeError as exc:

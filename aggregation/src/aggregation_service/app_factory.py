@@ -20,6 +20,15 @@ from shared_logic.storage import init_schema, open_db, upsert_control
 
 
 def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[Control, str | None]:
+    """Validate a control payload and build a `Control`.
+
+    Args:
+        data: Request JSON payload for control creation/upsert.
+        require_test_name: Whether `testName` must be present and valid.
+
+    Returns:
+        Tuple of validated `Control` and optional `testName`.
+    """
     test_name = data.get("testName") if require_test_name else None
     control_id = data.get("controlId", "")
     control_type = data.get("controlType", "")
@@ -53,6 +62,15 @@ def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) 
 
 
 def _validate_holding_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[HoldingInput, str | None]:
+    """Validate a holding payload and build `HoldingInput`.
+
+    Args:
+        data: Request JSON payload for a holding interval.
+        require_test_name: Whether `testName` must be present and valid.
+
+    Returns:
+        Tuple of validated `HoldingInput` and optional `testName`.
+    """
     test_name = data.get("testName") if require_test_name else None
     if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
         raise ValidationError("invalid testName", field="testName")
@@ -87,6 +105,15 @@ def _validate_holding_payload(data: dict[str, Any], *, require_test_name: bool) 
 
 
 def _validate_transition_payload(data: dict[str, Any], *, require_test_name: bool) -> tuple[TransitionInput, str | None]:
+    """Validate a transition payload and build `TransitionInput`.
+
+    Args:
+        data: Request JSON payload for a transition event.
+        require_test_name: Whether `testName` must be present and valid.
+
+    Returns:
+        Tuple of validated `TransitionInput` and optional `testName`.
+    """
     test_name = data.get("testName") if require_test_name else None
     if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
         raise ValidationError("invalid testName", field="testName")
@@ -121,6 +148,14 @@ def _validate_transition_payload(data: dict[str, Any], *, require_test_name: boo
 
 
 def _main_db_path() -> Path:
+    """Resolve the production database path.
+
+    Args:
+        None.
+
+    Returns:
+        Absolute path to the main SQLite database.
+    """
     override = os.getenv("HAA_DB_PATH", "").strip()
     if override:
         return Path(override).resolve()
@@ -128,12 +163,28 @@ def _main_db_path() -> Path:
 
 
 def _open_main_db():
+    """Open a connection to the production database.
+
+    Args:
+        None.
+
+    Returns:
+        Open SQLite connection to the main database path.
+    """
     db_path = _main_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return open_db(db_path)
 
 
 def _open_test_db(test_name: str):
+    """Open and initialize a per-test database.
+
+    Args:
+        test_name: Slug name used to derive the isolated test DB path.
+
+    Returns:
+        Tuple of `(connection, db_path)` for the test database.
+    """
     root = test_data_root()
     root.mkdir(parents=True, exist_ok=True)
     db_path = root / f"{test_name}-test-data.sqlite"
@@ -143,6 +194,14 @@ def _open_test_db(test_name: str):
 
 
 def _test_db_path(test_name: str) -> Path:
+    """Build the per-test SQLite path for a test name.
+
+    Args:
+        test_name: Slug name of the testing flow.
+
+    Returns:
+        Path to the test database file.
+    """
     return test_data_root() / f"{test_name}-test-data.sqlite"
 
 
@@ -156,6 +215,14 @@ def create_main_app(cfg: Config) -> Flask:
         init_conn.close()
 
     def _get_conn():
+        """Get or lazily create a request-scoped main DB connection.
+
+        Args:
+            None.
+
+        Returns:
+            Open SQLite connection stored in Flask `g`.
+        """
         conn = g.get("main_db_conn")
         if conn is None:
             conn = _open_main_db()
@@ -164,16 +231,40 @@ def create_main_app(cfg: Config) -> Flask:
 
     @app.teardown_appcontext
     def _teardown_main_conn(_exception):
+        """Close any request-scoped main DB connection at teardown.
+
+        Args:
+            _exception: Flask teardown exception object, if any.
+
+        Returns:
+            None.
+        """
         conn = g.pop("main_db_conn", None)
         if conn is not None:
             conn.close()
 
     @app.get("/v1/health")
     def health():
+        """Return main API health state.
+
+        Args:
+            None.
+
+        Returns:
+            Flask JSON response declaring service status.
+        """
         return jsonify({"status": "ok"})
 
     @app.post("/v1/controls")
     def controls():
+        """Create or update control metadata in the main database.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(
                 request,
@@ -194,6 +285,14 @@ def create_main_app(cfg: Config) -> Flask:
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
+        """Ingest a holding interval into main aggregates.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(
                 request,
@@ -213,6 +312,14 @@ def create_main_app(cfg: Config) -> Flask:
 
     @app.post("/v1/transitions")
     def transitions():
+        """Ingest a transition event into main aggregates.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(
                 request,
@@ -232,6 +339,14 @@ def create_main_app(cfg: Config) -> Flask:
 
     @app.post("/v1/snapshots")
     def snapshots():
+        """Export a production snapshot from the main database.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with exported snapshot metadata.
+        """
         try:
             decode_strict_json(request, required=[])
             conn = _get_conn()
@@ -252,10 +367,26 @@ def create_testing_app(cfg: Config) -> Flask:
 
     @app.get("/v1/health")
     def health():
+        """Return testing API health state.
+
+        Args:
+            None.
+
+        Returns:
+            Flask JSON response declaring service status.
+        """
         return jsonify({"status": "ok"})
 
     @app.post("/v1/controls")
     def controls():
+        """Create or update control metadata in a test database.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(
                 request,
@@ -276,6 +407,14 @@ def create_testing_app(cfg: Config) -> Flask:
 
     @app.post("/v1/holding-intervals")
     def holding_intervals():
+        """Ingest a holding interval into a test database aggregate set.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(
                 request,
@@ -297,6 +436,14 @@ def create_testing_app(cfg: Config) -> Flask:
 
     @app.post("/v1/transitions")
     def transitions():
+        """Ingest a transition event into a test database aggregate set.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(
                 request,
@@ -318,6 +465,14 @@ def create_testing_app(cfg: Config) -> Flask:
 
     @app.post("/v1/snapshots")
     def snapshots():
+        """Export a named snapshot file for a specific test database.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with snapshot metadata.
+        """
         try:
             payload = decode_strict_json(request, required=["testName", "snapshotName"])
             test_name = payload["testName"]
@@ -342,6 +497,14 @@ def create_testing_app(cfg: Config) -> Flask:
 
     @app.post("/v1/reset")
     def reset():
+        """Delete a test database and its SQLite sidecar files.
+
+        Args:
+            None.
+
+        Returns:
+            Flask response tuple with JSON payload and HTTP status.
+        """
         try:
             payload = decode_strict_json(request, required=["testName"])
             test_name = payload["testName"]
