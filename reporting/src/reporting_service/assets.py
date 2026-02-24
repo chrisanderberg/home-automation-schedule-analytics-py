@@ -178,7 +178,7 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
 
     return MaterializeResult(
         metadata={
-            "snapshot_path": str(snapshot_path),
+            "snapshot_path": MetadataValue.path(snapshot_path),
             "controls_count": controls_count,
             "aggregates_count": aggregates_count,
         }
@@ -314,9 +314,9 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
 
     return MaterializeResult(
         metadata={
-            "repository_root": str(repository_root()),
+            "repository_root": MetadataValue.path(repository_root()),
             "testing_api_url": base_url,
-            "snapshot_path": str(snapshot_path),
+            "snapshot_path": MetadataValue.path(snapshot_path),
             "controls_count": controls_count,
             "aggregates_count": aggregates_count,
             "test_name": test_name,

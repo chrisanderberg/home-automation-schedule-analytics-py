@@ -62,8 +62,8 @@ class ServerController:
             self.main_server = make_server("0.0.0.0", main_port, main_app)
         except OSError as exc:
             raise PortBindError(main_port, exc) from exc
-        testing_app = create_testing_app(cfg)
         try:
+            testing_app = create_testing_app(cfg)
             self.testing_server = make_server("0.0.0.0", testing_port, testing_app)
         except OSError as exc:
             self.main_server.server_close()

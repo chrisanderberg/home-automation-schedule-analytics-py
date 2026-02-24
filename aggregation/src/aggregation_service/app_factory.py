@@ -536,6 +536,8 @@ def create_testing_app(cfg: Config) -> Flask:
             reset_test_db_files(db_path)
             with _initialized_test_dbs_lock:
                 _initialized_test_dbs.discard(test_name)
+            with _test_db_init_locks_guard:
+                _test_db_init_locks.pop(test_name, None)
             return jsonify({"status": "ok"}), 200
 
         return _handle_request(app, _action, log_message="testing reset endpoint failed")
