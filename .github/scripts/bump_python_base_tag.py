@@ -80,23 +80,23 @@ def main() -> int:
         dockerfile = Path(sys.argv[1]).resolve()
         text, major, minor, current_patch = _read_dockerfile(dockerfile)
         latest_patch = _fetch_latest_patch(major, minor)
-    except Exception as exc:
+
+        if latest_patch == current_patch:
+            print(f"{dockerfile}: already up to date at {major}.{minor}.{current_patch}")
+            return 0
+
+        if latest_patch < current_patch:
+            print(
+                f"{dockerfile}: current patch {current_patch} is newer than upstream {latest_patch}; skipping update"
+            )
+            return 0
+
+        _write_updated_dockerfile(dockerfile, text, major, minor, latest_patch)
+        print(f"{dockerfile}: updated python tag {major}.{minor}.{current_patch} -> {major}.{minor}.{latest_patch}")
+        return 0
+    except (ValueError, RuntimeError, urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-
-    if latest_patch == current_patch:
-        print(f"{dockerfile}: already up to date at {major}.{minor}.{current_patch}")
-        return 0
-
-    if latest_patch < current_patch:
-        print(
-            f"{dockerfile}: current patch {current_patch} is newer than upstream {latest_patch}; skipping update"
-        )
-        return 0
-
-    _write_updated_dockerfile(dockerfile, text, major, minor, latest_patch)
-    print(f"{dockerfile}: updated python tag {major}.{minor}.{current_patch} -> {major}.{minor}.{latest_patch}")
-    return 0
 
 
 if __name__ == "__main__":
