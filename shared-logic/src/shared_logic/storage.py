@@ -119,16 +119,24 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
             if aggregates_exists:
                 aggregates_row_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
                 cols = conn.execute("PRAGMA table_info(aggregates)").fetchall()
-                has_expected_schema = [row[1] for row in cols] == [
+                fk_rows = conn.execute("PRAGMA foreign_key_list(aggregates)").fetchall()
+                has_expected_columns = [row[1] for row in cols] == [
                     "control_id",
                     "model_id",
                     "quarter_index",
                     "blob",
                 ]
+                has_expected_fk = any(row[2] == "controls" and row[3] == "control_id" and row[4] == "control_id" for row in fk_rows)
+                has_expected_schema = has_expected_columns and has_expected_fk
 
             if not aggregates_old_exists:
-                logger.warning("no aggregates_old table found during migration failure cleanup")
-            elif rollback_succeeded and aggregates_exists and (aggregates_row_count > 0 or has_expected_schema):
+                logger.warning(
+                    "no aggregates_old table found during migration failure cleanup "
+                    "(rollback_succeeded=%s, aggregates_old_exists=%s); prior rollback may have undone rename",
+                    rollback_succeeded,
+                    aggregates_old_exists,
+                )
+            elif rollback_succeeded and aggregates_exists and has_expected_schema:
                 conn.execute("DROP TABLE aggregates_old")
                 logger.warning(
                     "dropped aggregates_old after failed migration because aggregates appears valid "
@@ -145,10 +153,16 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
                     aggregates_row_count,
                     has_expected_schema,
                 )
-                if not aggregates_exists or aggregates_row_count == 0:
-                    if aggregates_exists:
+                should_restore = aggregates_exists and aggregates_row_count > 0 and not has_expected_schema
+                if should_restore:
+                    conn.execute("BEGIN IMMEDIATE")
+                    try:
                         conn.execute("DROP TABLE aggregates")
-                    conn.execute("ALTER TABLE aggregates_old RENAME TO aggregates")
+                        conn.execute("ALTER TABLE aggregates_old RENAME TO aggregates")
+                        conn.execute("COMMIT")
+                    except Exception:
+                        conn.execute("ROLLBACK")
+                        raise
                     logger.warning("restored aggregates from aggregates_old after migration failure")
         except Exception:
             logger.exception("cleanup failed while preserving/restoring aggregates_old after migration failure")

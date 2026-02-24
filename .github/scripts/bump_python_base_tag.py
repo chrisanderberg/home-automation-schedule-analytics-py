@@ -94,7 +94,7 @@ def main() -> int:
         _write_updated_dockerfile(dockerfile, text, major, minor, latest_patch)
         print(f"{dockerfile}: updated python tag {major}.{minor}.{current_patch} -> {major}.{minor}.{latest_patch}")
         return 0
-    except (ValueError, RuntimeError, urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+    except (ValueError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
