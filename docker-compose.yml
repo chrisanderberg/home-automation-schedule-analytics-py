@@ -13,7 +13,9 @@ services:
       HAA_TESTING_PORT: "8081"
     ports:
       - "8080:8080"
-      - "8081:8081"
+    # Keep testing API internal; reporting reaches it via aggregation:8081 on the Docker network.
+    expose:
+      - "8081"
     volumes:
       - app_data:/app/data
       - app_test_data:/app/test-data

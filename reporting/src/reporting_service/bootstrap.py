@@ -15,6 +15,7 @@ def ensure_repo_src_paths() -> None:
         repo_root / "reporting" / "src",
         repo_root / "aggregation" / "src",
     ]
+    # First candidate should have highest import precedence.
     for path in reversed(candidates):
         path_str = str(path)
         if path.exists() and path_str not in sys.path:

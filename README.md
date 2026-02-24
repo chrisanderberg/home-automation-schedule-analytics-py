@@ -10,6 +10,7 @@ Monorepo layout:
 
 ```bash
 make setup-aggregation
+# Replace HAA_LATITUDE/HAA_LONGITUDE with your own coordinates (decimal degrees).
 export HAA_LATITUDE="37.7749"
 export HAA_LONGITUDE="-122.4194"
 PYTHONPATH=shared-logic/src:aggregation/src python -m aggregation_service.main

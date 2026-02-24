@@ -23,12 +23,20 @@ def repository_root() -> Path:
     if found is not None:
         return found
 
-    package_ref = Path(str(importlib.resources.files(__package__))).resolve()
-    found = _find_repo_root_from(package_ref)
-    if found is not None:
-        return found
+    package_ref: Path | None = None
+    if getattr(importlib.resources, "files", None) is not None and __package__ is not None:
+        try:
+            traversable = importlib.resources.files(__name__)
+            if getattr(traversable, "is_dir", None) is not None and traversable.is_dir():
+                with importlib.resources.as_file(traversable) as resolved_dir:
+                    package_ref = resolved_dir.resolve()
+                    found = _find_repo_root_from(package_ref)
+                    if found is not None:
+                        return found
+        except Exception:
+            package_ref = None
 
-    raise RuntimeError(f"repository root not found from {here}")
+    raise RuntimeError(f"repository root not found from {here} (package_ref={package_ref})")
 
 
 def data_root() -> Path:

@@ -34,26 +34,33 @@ def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = out_path.with_name(f"{out_path.name}.tmp-{uuid4().hex}")
     dst = sqlite3.connect(str(temp_path), isolation_level=None)
+    success = False
 
     try:
         # Use SQLite backup API for consistent local snapshots.
         conn.backup(dst)
-        wal = temp_path.with_name(temp_path.name + "-wal")
-        shm = temp_path.with_name(temp_path.name + "-shm")
-        for aux in (wal, shm):
-            if aux.exists():
-                aux.unlink()
-        temp_path.replace(out_path)
-    finally:
         dst.close()
-        if temp_path.exists():
-            temp_path.unlink()
+        dst = None
         for aux in (
             temp_path.with_name(temp_path.name + "-wal"),
             temp_path.with_name(temp_path.name + "-shm"),
         ):
             if aux.exists():
                 aux.unlink()
+        temp_path.replace(out_path)
+        success = True
+    finally:
+        if dst is not None:
+            dst.close()
+        if not success:
+            if temp_path.exists():
+                temp_path.unlink()
+            for aux in (
+                temp_path.with_name(temp_path.name + "-wal"),
+                temp_path.with_name(temp_path.name + "-shm"),
+            ):
+                if aux.exists():
+                    aux.unlink()
     return out_path.resolve()
 
 

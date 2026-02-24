@@ -9,8 +9,8 @@ MAX_ERROR_BODY_CHARS = 200
 
 
 def _sanitize_error_body(body: str) -> str:
-    """Return a bounded, non-PII-heavy representation of an invalid payload."""
-    compact = body.strip().replace("\n", " ")
+    """Return a bounded representation of invalid payload text (no PII redaction)."""
+    compact = " ".join(body.splitlines()).strip()
     if len(compact) > MAX_ERROR_BODY_CHARS:
         return f"{compact[:MAX_ERROR_BODY_CHARS]}... (truncated)"
     return compact or "unparseable payload"
