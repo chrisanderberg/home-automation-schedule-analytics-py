@@ -250,8 +250,8 @@ def _handle_request(
         return jsonify({"error": message}), 400
     except ValidationError as exc:
         return jsonify({"error": str(exc)}), 400
-    except Exception as exc:  # pragma: no cover - defensive API surface
-        app.logger.exception("%s: %s", log_message, exc)
+    except Exception:  # pragma: no cover - defensive API surface
+        app.logger.exception("%s", log_message)
         return jsonify({"error": internal_error}), 500
 
 

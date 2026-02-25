@@ -117,7 +117,7 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
                 for clock_idx, split_fn in splitters:
                     try:
                         spans = split_fn()
-                    except UndefinedClockError:
+                    except (UndefinedClockError, ValueError):
                         continue
                     for span in spans:
                         idx = hold_index(input_data.state, clock_idx, span.bucket, control.num_states)

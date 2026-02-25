@@ -23,6 +23,7 @@ RUN chown -R appuser:appuser /app/.dagster /app/.dagster-default /app/data /home
 COPY reporting/entrypoint.sh /entrypoint.sh
 COPY reporting/supervisord.conf /app/supervisord.conf
 RUN chmod +x /entrypoint.sh
+USER appuser:appuser
 ENTRYPOINT ["/entrypoint.sh"]
 
 EXPOSE 3000

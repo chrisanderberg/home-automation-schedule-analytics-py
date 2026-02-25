@@ -45,7 +45,7 @@ def split_interval_by_quarter_utc(start_ms: int, end_ms: int) -> list[QuarterSpa
             next_q_month = 1
             year += 1
         boundary_dt = datetime(year, next_q_month, 1, tzinfo=UTC)
-        boundary_ms = int(round(boundary_dt.timestamp() * 1000))
+        boundary_ms = round(boundary_dt.timestamp() * 1000)
         if boundary_ms > end_ms:
             boundary_ms = end_ms
         spans.append(QuarterSpan(quarter_index=q_idx, start_ms=cur, end_ms=boundary_ms))

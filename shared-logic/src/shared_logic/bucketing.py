@@ -19,7 +19,11 @@ WEEK_MS = 7 * DAY_MS
 
 @dataclass(frozen=True)
 class ClockContext:
-    """Clock conversion context."""
+    """Clock conversion context kept for future shared API consolidation.
+
+    This overlaps with ``shared_logic.contracts.Config`` today; keep this type as
+    a dedicated clock-context shape for future bucketing/ingest signature cleanup.
+    """
 
     time_zone: str
     latitude: float
@@ -345,6 +349,11 @@ def _next_unequal_boundary(timestamp_ms: int, latitude: float, longitude: float)
         Boundary timestamp in milliseconds.
     """
     _validate_coordinates(latitude, longitude)
+    return _next_unequal_boundary_unchecked(timestamp_ms, latitude, longitude)
+
+
+def _next_unequal_boundary_unchecked(timestamp_ms: int, latitude: float, longitude: float) -> int:
+    """Find next unequal-hours bucket boundary without coordinate validation."""
     start_bucket = _bucket_at_unequal_hours_unchecked(timestamp_ms, latitude, longitude)
     low = timestamp_ms
     probe = timestamp_ms + 60 * 1000
@@ -391,8 +400,8 @@ def split_interval_unequal_hours(start_ms: int, end_ms: int, latitude: float, lo
     spans: list[BucketSpan] = []
     cur = start_ms
     while cur < end_ms:
-        bucket = bucket_at_unequal_hours(cur, latitude, longitude)
-        boundary = _next_unequal_boundary(cur, latitude, longitude)
+        bucket = _bucket_at_unequal_hours_unchecked(cur, latitude, longitude)
+        boundary = _next_unequal_boundary_unchecked(cur, latitude, longitude)
         boundary = min(boundary, end_ms)
         millis = boundary - cur
         if millis <= 0:

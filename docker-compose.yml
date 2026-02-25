@@ -7,6 +7,8 @@ services:
       HAA_TIMEZONE: UTC
       HAA_LATITUDE: ${HAA_LATITUDE:?HAA_LATITUDE is required - set numeric coordinate (e.g. 37.7749)}
       HAA_LONGITUDE: ${HAA_LONGITUDE:?HAA_LONGITUDE is required - set numeric coordinate (e.g. -122.4194)}
+      HAA_MAIN_HOST: "0.0.0.0"
+      HAA_TESTING_HOST: "0.0.0.0"
       HAA_MAIN_PORT: "8080"
       HAA_TESTING_PORT: "8081"
     ports:
@@ -31,10 +33,10 @@ services:
     environment:
       HAA_TESTING_API_URL: http://aggregation:8081
       DAGSTER_HOME: /app/.dagster
-      DAGSTER_PG_USERNAME: dagster
-      DAGSTER_PG_PASSWORD: dagster
-      DAGSTER_PG_HOST: dagster_postgres
-      DAGSTER_PG_DB: dagster
+      DAGSTER_PG_USERNAME: ${DAGSTER_PG_USERNAME:-dagster}
+      DAGSTER_PG_PASSWORD: ${DAGSTER_PG_PASSWORD:?DAGSTER_PG_PASSWORD is required}
+      DAGSTER_PG_HOST: ${DAGSTER_PG_HOST:-dagster_postgres}
+      DAGSTER_PG_DB: ${DAGSTER_PG_DB:-dagster}
       DAGSTER_PG_PORT: ${DAGSTER_PG_PORT:-5432}
     depends_on:
       aggregation:
@@ -51,13 +53,13 @@ services:
   dagster_postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: dagster
-      POSTGRES_PASSWORD: dagster
-      POSTGRES_DB: dagster
+      POSTGRES_USER: ${DAGSTER_PG_USERNAME:-dagster}
+      POSTGRES_PASSWORD: ${DAGSTER_PG_PASSWORD:?DAGSTER_PG_PASSWORD is required}
+      POSTGRES_DB: ${DAGSTER_PG_DB:-dagster}
     volumes:
       - dagster_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 5

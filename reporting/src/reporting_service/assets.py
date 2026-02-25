@@ -161,7 +161,7 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
     try:
         snapshot_path = snapshot_path_fn()
     except RuntimeError as exc:
-        context.log.error("snapshot lookup failed for %s: %s", label, exc)
+        context.log.exception("snapshot lookup failed for %s: %s", label, exc)
         raise Failure(
             description=f"snapshot lookup failed for {label}: {exc}",
             metadata={"snapshot_missing": True, "target": label},
@@ -269,14 +269,14 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
         _require_status(status, 200, "snapshot export", payload)
     except urllib.error.URLError as exc:
         message = f"testing API unavailable at {base_url}: {exc}"
-        context.log.error(message)
+        context.log.exception(message)
         raise Failure(description=message, metadata={"snapshot_missing": True}) from exc
     except RuntimeError as exc:
         message = (
             "testing API validation failed"
             f" (base_url={base_url}, test_name={test_name}, snapshot_name={snapshot_name}): {exc}"
         )
-        context.log.error(message)
+        context.log.exception(message)
         raise Failure(description=message, metadata={"snapshot_missing": True}) from exc
 
     snapshot_path_raw = None

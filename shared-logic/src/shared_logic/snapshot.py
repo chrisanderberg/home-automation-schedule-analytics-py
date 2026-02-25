@@ -74,10 +74,7 @@ def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
                 temp_path.unlink(missing_ok=True)
             except OSError:
                 pass
-            try:
-                _cleanup_sidecars(temp_path)
-            except OSError:
-                pass
+            _cleanup_sidecars(temp_path)
     return out_path.resolve()
 
 

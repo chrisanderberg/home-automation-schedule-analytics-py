@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from .blob import MAX_STATES, MIN_STATES
 
 __all__ = [
+    "AggregateKey",
+    "BucketSpan",
     "Config",
     "Control",
-    "AggregateKey",
     "HoldingInput",
-    "TransitionInput",
-    "BucketSpan",
     "QuarterSpan",
+    "TransitionInput",
 ]
 
 

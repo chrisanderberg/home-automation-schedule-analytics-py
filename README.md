@@ -28,6 +28,7 @@ PYTHONPATH=shared-logic/src:reporting/src dagster dev -m reporting_service.defin
 ```bash
 export HAA_LATITUDE="37.7749"
 export HAA_LONGITUDE="-122.4194"
+export DAGSTER_PG_PASSWORD="<rotate-me>"
 docker compose up --build
 ```
 
@@ -35,6 +36,8 @@ docker compose up --build
 - **Reporting (Dagster UI)**: `http://localhost:3000`
 
 The reporting service runs **dagster-webserver** (UI) and **dagster-daemon** (schedules/sensors) via supervisord in the Docker image. Both require **DAGSTER_HOME** (`/app/.dagster`) for run history and SQLite state. The `app_dagster_home` volume is mounted at `/app/.dagster` so this state persists across container restarts. Without this mount, run history and schedule/sensor state would be ephemeral.
+
+Do not commit database secrets to git. Set `DAGSTER_PG_PASSWORD` from deployment secrets/CI (or a local `.env` file consumed by Docker Compose), and rotate any default/shared password before deploying.
 
 ## Run tests
 

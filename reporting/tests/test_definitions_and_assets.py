@@ -31,6 +31,15 @@ class ReportingDagsterTests(unittest.TestCase):
 
     def test_schedule_timezone_prefers_reporting_override_then_runtime_timezone(self):
         # Verifies schedule timezone can be driven by environment settings.
+        original_reporting_tz = os.environ.get("HAA_REPORTING_TIMEZONE")
+
+        def _restore_reporting_tz() -> None:
+            if original_reporting_tz is None:
+                os.environ.pop("HAA_REPORTING_TIMEZONE", None)
+            else:
+                os.environ["HAA_REPORTING_TIMEZONE"] = original_reporting_tz
+
+        self.addCleanup(_restore_reporting_tz)
         self.addCleanup(lambda: importlib.reload(definitions_module))
         with patch.dict(
             os.environ,
