@@ -226,15 +226,17 @@ def _load_ports() -> tuple[int, int]:
 def _load_bind_hosts() -> tuple[str, str]:
     """Load and validate bind host settings for the main and testing APIs.
 
-    Args:
-        Environment variables (from os.environ):
-            HAA_MAIN_HOST: Bind host for the main API. Defaults to 127.0.0.1 when unset or empty.
-            HAA_TESTING_HOST: Bind host for the testing API. Defaults to 127.0.0.1 when unset or empty.
-        Implicit context: Uses _DEFAULT_MAIN_HOST and _DEFAULT_TESTING_HOST when
-            environment variables are unset or empty after stripping whitespace.
+    Environment:
+        HAA_MAIN_HOST: Bind host for the main API. Defaults to 127.0.0.1 when
+            unset or empty after stripping whitespace.
+        HAA_TESTING_HOST: Bind host for the testing API. Defaults to 127.0.0.1
+            when unset or empty after stripping whitespace.
+        Both variables are read from ``os.environ``. When unset or empty after
+        strip, the module-level constants ``_DEFAULT_MAIN_HOST`` and
+        ``_DEFAULT_TESTING_HOST`` are used respectively.
 
     Returns:
-        Tuple `(main_host, testing_host)` of validated host strings.
+        Tuple ``(main_host, testing_host)`` of validated host strings.
 
     Raises:
         ConfigurationError: If a host cannot be resolved via socket.getaddrinfo.

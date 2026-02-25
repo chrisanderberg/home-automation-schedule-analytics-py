@@ -35,6 +35,7 @@ services:
       DAGSTER_PG_PASSWORD: dagster
       DAGSTER_PG_HOST: dagster_postgres
       DAGSTER_PG_DB: dagster
+      DAGSTER_PG_PORT: ${DAGSTER_PG_PORT:-5432}
     depends_on:
       aggregation:
         condition: service_healthy

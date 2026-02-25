@@ -5,25 +5,23 @@
 # DAGSTER_HOME defaults to /app/.dagster if unset; operators may override via env.
 set -e
 dagster_home="${DAGSTER_HOME:-/app/.dagster}"
+mkdir -p "$dagster_home"
 for f in workspace.yaml dagster.yaml; do
   if [ ! -f "$dagster_home/$f" ] && [ -f "/app/.dagster-default/$f" ]; then
     cp "/app/.dagster-default/$f" "$dagster_home/$f"
   fi
 done
+for f in workspace.yaml dagster.yaml; do
+  if [ ! -f "$dagster_home/$f" ]; then
+    echo "error: $dagster_home/$f missing after init" >&2
+    exit 1
+  fi
+done
 for dir in "$dagster_home" /app/data; do
   if [ -d "$dir" ]; then
-    if ! chown -R appuser:appuser "$dir"; then
-      _ec=$?
-      echo "warning: chown -R appuser:appuser $dir failed (exit $_ec)" >&2
-    fi
-    if ! find "$dir" -type d -exec chmod 0750 {} +; then
-      _ec=$?
-      echo "warning: chmod 0750 on directories under $dir failed (exit $_ec)" >&2
-    fi
-    if ! find "$dir" -type f -exec chmod 0640 {} +; then
-      _ec=$?
-      echo "warning: chmod 0640 on files under $dir failed (exit $_ec)" >&2
-    fi
+    chown -R appuser:appuser "$dir" || { _ec=$?; echo "warning: chown -R appuser:appuser $dir failed (exit $_ec)" >&2; }
+    find "$dir" -type d -exec chmod 0750 {} + || { _ec=$?; echo "warning: chmod 0750 on directories under $dir failed (exit $_ec)" >&2; }
+    find "$dir" -type f -exec chmod 0640 {} + || { _ec=$?; echo "warning: chmod 0640 on files under $dir failed (exit $_ec)" >&2; }
   fi
 done
 exec gosu appuser "$@"
