@@ -16,11 +16,11 @@ class BadRequestError(ValueError):
 
 def decode_strict_json(request: Request, required: Iterable[str], optional: Iterable[str] = ()) -> dict[str, Any]:
     """Decode JSON object and reject unknown or missing fields."""
-    if request.mimetype != "application/json":
+    if not request.is_json:
         raise BadRequestError("Content-Type must be application/json")
     try:
         data = request.get_json(silent=False)
-    except (json.JSONDecodeError, UnicodeDecodeError, BadRequest) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, BadRequest, ValueError) as exc:
         raise BadRequestError("invalid json body") from exc
     if not isinstance(data, dict):
         raise BadRequestError("JSON payload must be an object")

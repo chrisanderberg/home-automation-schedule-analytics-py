@@ -14,7 +14,13 @@ class RepositoryRootNotFound(RuntimeError):
 
 
 def find_repo_root(start: Path) -> Path:
-    """Walk upward from a path to locate the repository root."""
+    """Walk upward from a path to locate the repository root.
+
+    If start is a file, it is normalized to its parent directory before walking.
+    The path is resolved (start.resolve()) before walking upward. Callers may
+    safely pass Path(__file__); the function handles file inputs and returns
+    a resolved directory Path representing the repository root.
+    """
     if start.is_file():
         start = start.parent
     start = start.resolve()
@@ -27,10 +33,9 @@ def find_repo_root(start: Path) -> Path:
 def ensure_repo_src_paths_for_service(service_name: str, here: Path) -> None:
     """Add local src roots to sys.path for direct execution.
 
-    Callers must pass the directory containing the entrypoint (e.g.,
-    Path(__file__).parent), not Path(__file__) itself. Passing the file path
-    can trigger silent-wrong-first-iteration behavior in find_repo_root and
-    lead to incorrect root discovery.
+    Pass the directory containing the entrypoint (e.g., Path(__file__).parent)
+    as a stylistic convention. find_repo_root also accepts a file path and
+    normalizes it to its parent before walking upward.
 
     Service src has higher import precedence than shared-logic.
     """
@@ -39,7 +44,8 @@ def ensure_repo_src_paths_for_service(service_name: str, here: Path) -> None:
         repo_root / "shared-logic" / "src",
         repo_root / service_name / "src",
     ]
-    # Insert in order so service_name/src gets highest precedence (inserted last).
+    # Insert in front so the last valid candidate wins (highest precedence);
+    # each sys.path.insert(0, path_str) pushes earlier entries right.
     for path in candidates:
         path_str = str(path)
         if path.exists() and path_str not in sys.path:

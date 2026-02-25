@@ -365,6 +365,7 @@ def _next_unequal_boundary_unchecked(timestamp_ms: int, latitude: float, longitu
         UndefinedClockError: When clock mapping is undefined (e.g. near polar extremes).
         ValueError: When the next bucket boundary could not be located within probe limit
             (message: "could not locate next bucket boundary within probe limit").
+        RuntimeError: When the binary search invariant is violated (hi <= timestamp_ms).
     """
     start_bucket = _bucket_at_unequal_hours_unchecked(timestamp_ms, latitude, longitude)
     low = timestamp_ms
@@ -380,10 +381,11 @@ def _next_unequal_boundary_unchecked(timestamp_ms: int, latitude: float, longitu
                     low = mid
                 else:
                     hi = mid
-            assert hi > timestamp_ms, (
-                f"binary search invariant violated: hi={hi} <= timestamp_ms={timestamp_ms} "
-                f"(BUCKET_MS={BUCKET_MS})"
-            )
+            if hi <= timestamp_ms:
+                raise RuntimeError(
+                    f"binary search invariant violated: hi={hi} <= timestamp_ms={timestamp_ms} "
+                    f"(BUCKET_MS={BUCKET_MS})"
+                )
             return hi
         low = probe
         probe += 60 * 1000

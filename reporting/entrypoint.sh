@@ -23,7 +23,9 @@ for dir in "$dagster_home" /app/data; do
     if [ "$CURRENT_UID" -eq 0 ]; then
       chown -R appuser:appuser "$dir" || { _ec=$?; echo "error: chown -R appuser:appuser $dir failed (exit $_ec)" >&2; exit "$_ec"; }
       find "$dir" -type d -exec chmod 0750 {} + || { _ec=$?; echo "error: chmod 0750 on directories under $dir failed (exit $_ec)" >&2; exit "$_ec"; }
-      find "$dir" -type f -exec chmod 0640 {} + || { _ec=$?; echo "error: chmod 0640 on files under $dir failed (exit $_ec)" >&2; exit "$_ec"; }
+      if [ "$dir" = "$dagster_home" ]; then
+        find "$dir" -type f -exec chmod 0640 {} + || { _ec=$?; echo "error: chmod 0640 on files under $dir failed (exit $_ec)" >&2; exit "$_ec"; }
+      fi
     fi
   fi
 done

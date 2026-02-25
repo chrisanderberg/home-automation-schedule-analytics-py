@@ -3,6 +3,9 @@ __pycache__/
 
 # env files with secrets (never commit)
 .env
+.env.local
+.env.*
+!.env.example
 env/*.local
 .venv/
 .pytest_cache/

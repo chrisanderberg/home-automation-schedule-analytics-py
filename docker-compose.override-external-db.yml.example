@@ -15,8 +15,8 @@ services:
     # Omit the profile when using external DB.
 
   reporting:
-    depends_on: !override
+    depends_on:
       aggregation:
         condition: service_healthy
-    # Removes dagster_postgres from depends_on so reporting can start
-    # without waiting for the local Postgres service.
+    # Explicitly omits dagster_postgres so reporting can start without
+    # waiting for the local Postgres service when using external DB.
