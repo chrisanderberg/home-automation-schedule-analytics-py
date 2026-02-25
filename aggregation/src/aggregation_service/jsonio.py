@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from typing import Any
 
@@ -15,11 +16,11 @@ class BadRequestError(ValueError):
 
 def decode_strict_json(request: Request, required: Iterable[str], optional: Iterable[str] = ()) -> dict[str, Any]:
     """Decode JSON object and reject unknown or missing fields."""
-    if not request.is_json:
+    if request.mimetype != "application/json":
         raise BadRequestError("Content-Type must be application/json")
     try:
         data = request.get_json(silent=False)
-    except (BadRequest, UnicodeDecodeError, ValueError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, BadRequest) as exc:
         raise BadRequestError("invalid json body") from exc
     if not isinstance(data, dict):
         raise BadRequestError("JSON payload must be an object")

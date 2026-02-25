@@ -25,11 +25,12 @@ PYTHONPATH=shared-logic/src:reporting/src dagster dev -m reporting_service.defin
 
 ## Deploy with Docker Compose
 
+Copy `.env.example` to `.env`, fill in `DAGSTER_PG_PASSWORD` (and adjust `HAA_LATITUDE`/`HAA_LONGITUDE` if desired), then start the stack:
+
 ```bash
-export HAA_LATITUDE="37.7749"
-export HAA_LONGITUDE="-122.4194"
-export DAGSTER_PG_PASSWORD="<rotate-me>"
-docker compose up --build
+cp .env.example .env
+# Edit .env and set DAGSTER_PG_PASSWORD (rotate any default before deploying)
+docker compose --env-file .env up --build
 ```
 
 - **Aggregation**: `http://localhost:8080`
@@ -37,7 +38,17 @@ docker compose up --build
 
 The reporting service runs **dagster-webserver** (UI) and **dagster-daemon** (schedules/sensors) via supervisord in the Docker image. Both require **DAGSTER_HOME** (`/app/.dagster`) for run history and SQLite state. The `app_dagster_home` volume is mounted at `/app/.dagster` so this state persists across container restarts. Without this mount, run history and schedule/sensor state would be ephemeral.
 
-Do not commit database secrets to git. Set `DAGSTER_PG_PASSWORD` from deployment secrets/CI (or a local `.env` file consumed by Docker Compose), and rotate any default/shared password before deploying.
+Do not commit database secrets to git. Use a local `.env` file (or deployment secrets/CI) for `DAGSTER_PG_PASSWORD`. Update `.gitignore` to include `.env` and `env/*.local`, and verify `.env` is not tracked (e.g. run `git status` or `git rm --cached .env` if already added) so secrets are never committed. Rotate any default/shared password before deploying.
+
+### Using an external Postgres
+
+When `DAGSTER_PG_HOST` is set to an external Postgres host (e.g. a managed DB), the local `dagster_postgres` service in `docker-compose.yml` still starts by default. To disable it, use the override pattern:
+
+1. Copy the example override: `cp docker-compose.override-external-db.yml.example docker-compose.override.yml`
+2. Set `DAGSTER_PG_HOST`, `DAGSTER_PG_PORT`, `DAGSTER_PG_DB`, `DAGSTER_PG_USERNAME`, and `DAGSTER_PG_PASSWORD` in `.env` for your external instance.
+3. Run `docker compose up` as usual.
+
+The override puts `dagster_postgres` behind a Compose profile (`local-db`) and removes it from `reporting`'s `depends_on`, so the local service is not started when using an external DB. To run with the local DB again, remove `docker-compose.override.yml` or run `docker compose --profile local-db up`.
 
 ## Run tests
 

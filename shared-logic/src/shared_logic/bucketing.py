@@ -311,8 +311,6 @@ def _bucket_at_unequal_hours_unchecked(timestamp_ms: int, latitude: float, longi
 
     day_start = datetime(adj.year, adj.month, adj.day, tzinfo=UTC)
     solar_minutes = (adj - day_start).total_seconds() / 60
-    if solar_minutes < 0:
-        solar_minutes += 1440
 
     sunrise, sunset = _sunrise_sunset_solar_minutes(day_start, latitude)
     day_length = sunset - sunrise
@@ -353,7 +351,21 @@ def _next_unequal_boundary(timestamp_ms: int, latitude: float, longitude: float)
 
 
 def _next_unequal_boundary_unchecked(timestamp_ms: int, latitude: float, longitude: float) -> int:
-    """Find next unequal-hours bucket boundary without coordinate validation."""
+    """Find next unequal-hours bucket boundary without coordinate validation.
+
+    Args:
+        timestamp_ms: UTC timestamp in milliseconds.
+        latitude: Latitude in decimal degrees.
+        longitude: Longitude in decimal degrees.
+
+    Returns:
+        Next bucket boundary as int milliseconds.
+
+    Raises:
+        UndefinedClockError: When clock mapping is undefined (e.g. near polar extremes).
+        ValueError: When the next bucket boundary could not be located within probe limit
+            (message: "could not locate next bucket boundary within probe limit").
+    """
     start_bucket = _bucket_at_unequal_hours_unchecked(timestamp_ms, latitude, longitude)
     low = timestamp_ms
     probe = timestamp_ms + 60 * 1000
@@ -368,8 +380,10 @@ def _next_unequal_boundary_unchecked(timestamp_ms: int, latitude: float, longitu
                     low = mid
                 else:
                     hi = mid
-            if hi <= timestamp_ms:
-                return timestamp_ms + BUCKET_MS
+            assert hi > timestamp_ms, (
+                f"binary search invariant violated: hi={hi} <= timestamp_ms={timestamp_ms} "
+                f"(BUCKET_MS={BUCKET_MS})"
+            )
             return hi
         low = probe
         probe += 60 * 1000

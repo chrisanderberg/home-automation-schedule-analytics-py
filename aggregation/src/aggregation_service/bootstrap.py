@@ -1,4 +1,7 @@
-"""Runtime bootstrap helpers for local source-layout imports."""
+"""Runtime bootstrap helpers for local source-layout imports.
+
+Local src-root insertion is delegated to the shared ensure_repo_src_paths_for_service utility.
+"""
 
 from __future__ import annotations
 
@@ -6,18 +9,13 @@ from pathlib import Path
 
 from shared_logic.bootstrap import (
     RepositoryRootNotFound,
-    _find_repo_root as _shared_find_repo_root,
     ensure_repo_src_paths_for_service,
+    find_repo_root,
 )
 
-__all__ = ["RepositoryRootNotFound", "_find_repo_root", "ensure_repo_src_paths"]
-
-
-def _find_repo_root(start: Path) -> Path:
-    """Proxy to shared implementation for compatibility."""
-    return _shared_find_repo_root(start)
+__all__ = ["RepositoryRootNotFound", "ensure_repo_src_paths", "find_repo_root"]
 
 
 def ensure_repo_src_paths() -> None:
     """Add local src roots to sys.path for direct execution."""
-    ensure_repo_src_paths_for_service("aggregation", Path(__file__).resolve())
+    ensure_repo_src_paths_for_service("aggregation", Path(__file__).resolve().parent)
