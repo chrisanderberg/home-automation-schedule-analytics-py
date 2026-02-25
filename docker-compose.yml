@@ -31,8 +31,14 @@ services:
     environment:
       HAA_TESTING_API_URL: http://aggregation:8081
       DAGSTER_HOME: /app/.dagster
+      DAGSTER_PG_USERNAME: dagster
+      DAGSTER_PG_PASSWORD: dagster
+      DAGSTER_PG_HOST: dagster_postgres
+      DAGSTER_PG_DB: dagster
     depends_on:
       aggregation:
+        condition: service_healthy
+      dagster_postgres:
         condition: service_healthy
     ports:
       - "3000:3000"
@@ -41,7 +47,22 @@ services:
       - app_test_data:/app/test-data
       - app_dagster_home:/app/.dagster
 
+  dagster_postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    volumes:
+      - dagster_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   app_data:
   app_test_data:
   app_dagster_home:
+  dagster_postgres_data:

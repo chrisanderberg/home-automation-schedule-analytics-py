@@ -23,7 +23,8 @@ from shared_logic.contracts import Config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MAIN_HOST = "0.0.0.0"
+# Main API listens on loopback by default; set HAA_MAIN_HOST=0.0.0.0 to opt into external binding.
+_DEFAULT_MAIN_HOST = "127.0.0.1"
 _DEFAULT_TESTING_HOST = "127.0.0.1"
 
 
@@ -225,10 +226,18 @@ def _load_ports() -> tuple[int, int]:
 def _load_bind_hosts() -> tuple[str, str]:
     """Load and validate bind host settings for the main and testing APIs.
 
-    Validates HAA_MAIN_HOST and HAA_TESTING_HOST: ensures each host can be
-    resolved via socket.getaddrinfo. Raises
-    ConfigurationError on failure so _create_server_controller sees configuration
-    problems as ConfigurationError instead of raw OSError.
+    Args:
+        Environment variables (from os.environ):
+            HAA_MAIN_HOST: Bind host for the main API. Defaults to 127.0.0.1 when unset or empty.
+            HAA_TESTING_HOST: Bind host for the testing API. Defaults to 127.0.0.1 when unset or empty.
+        Implicit context: Uses _DEFAULT_MAIN_HOST and _DEFAULT_TESTING_HOST when
+            environment variables are unset or empty after stripping whitespace.
+
+    Returns:
+        Tuple `(main_host, testing_host)` of validated host strings.
+
+    Raises:
+        ConfigurationError: If a host cannot be resolved via socket.getaddrinfo.
     """
     main_host = os.getenv("HAA_MAIN_HOST", _DEFAULT_MAIN_HOST).strip() or _DEFAULT_MAIN_HOST
     testing_host = os.getenv("HAA_TESTING_HOST", _DEFAULT_TESTING_HOST).strip() or _DEFAULT_TESTING_HOST
@@ -287,19 +296,8 @@ def _create_server_controller(
                 ) from exc
             else:
                 raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
-        elif exc.errno == EADDRINUSE:
-            port_context = f"ports main={main_port}, testing={testing_port}"
-            raise ConfigurationError(
-                f"failed to bind API {port_context}: address already in use"
-            ) from exc
-        elif exc.errno == EACCES:
-            port_context = f"ports main={main_port}, testing={testing_port}"
-            raise ConfigurationError(
-                f"failed to bind API {port_context}: permission denied"
-            ) from exc
         else:
-            port_context = f"ports main={main_port}, testing={testing_port}"
-            raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
+            raise ConfigurationError(f"failed to bind API: {exc}") from exc
 
 
 def run() -> int:
