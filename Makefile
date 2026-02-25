@@ -40,7 +40,8 @@ run-reporting-tests:
 	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/reporting/tests -p "test_*.py"
 
 clean:
-	rm -rf .pytest_cache .ruff_cache .tmp_dagster_home_* .coverage
+	rm -rf .pytest_cache .ruff_cache .tmp_dagster_home_* .coverage *.egg-info .eggs
+	rm -f .coverage.*
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 

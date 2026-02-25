@@ -193,19 +193,6 @@ def _open_main_db():
     return open_db(db_path)
 
 
-def _open_test_db(test_name: str):
-    """Open and initialize a per-test database.
-
-    Args:
-        test_name: Slug name used to derive the isolated test DB path.
-
-    Returns:
-        Tuple of `(connection, db_path)` for the test database.
-    """
-    with _test_db_init_lock(test_name):
-        return _open_test_db_locked(test_name)
-
-
 def _open_test_db_locked(test_name: str):
     """Open and initialize a per-test database while holding the per-test lock."""
     db_path = _test_db_path(test_name)

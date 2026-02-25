@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import signal
+import socket
 import threading
 import time
 from errno import EACCES, EADDRINUSE
@@ -61,6 +62,8 @@ class ServerController:
             cfg: Runtime clock/location configuration shared by both apps.
             main_port: Port for the main API server.
             testing_port: Port for the testing API server.
+            main_host: Host/interface for the main API server. Keyword-only.
+            testing_host: Host/interface for the testing API server. Keyword-only.
         """
         self._stop = threading.Event()
         self._shutdown_lock = threading.Lock()
@@ -213,9 +216,26 @@ def _load_ports() -> tuple[int, int]:
 
 
 def _load_bind_hosts() -> tuple[str, str]:
-    """Load bind host settings for the main and testing APIs."""
+    """Load and validate bind host settings for the main and testing APIs.
+
+    Validates HAA_MAIN_HOST and HAA_TESTING_HOST: ensures non-empty after strip
+    and that each host can be resolved via socket.getaddrinfo. Raises
+    ConfigurationError on failure so _create_server_controller sees configuration
+    problems as ConfigurationError instead of raw OSError.
+    """
     main_host = os.getenv("HAA_MAIN_HOST", "0.0.0.0").strip() or "0.0.0.0"
     testing_host = os.getenv("HAA_TESTING_HOST", "127.0.0.1").strip() or "127.0.0.1"
+
+    for host, env_var in [(main_host, "HAA_MAIN_HOST"), (testing_host, "HAA_TESTING_HOST")]:
+        if not host:
+            raise ConfigurationError(f"invalid {env_var}: value must be non-empty after strip")
+        try:
+            socket.getaddrinfo(host, None)
+        except OSError as exc:
+            raise ConfigurationError(
+                f"invalid {env_var}: host {host!r} cannot be resolved ({exc})"
+            ) from exc
+
     return main_host, testing_host
 
 
@@ -233,6 +253,8 @@ def _create_server_controller(
         cfg: Runtime configuration shared by both servers.
         main_port: Port for the main API server.
         testing_port: Port for the testing API server.
+        main_host: Bind host/address for the main API server.
+        testing_host: Bind host/address for the testing API server.
 
     Returns:
         Constructed `ServerController`.
@@ -246,22 +268,32 @@ def _create_server_controller(
             testing_host=testing_host,
         )
     except OSError as exc:
-        is_bind_error = getattr(exc, "failing_port", None) is not None or exc.errno in {EADDRINUSE, EACCES}
-        if not is_bind_error:
-            raise
-        failing_port = getattr(exc, "failing_port", None)
-        port_context = (
-            f"port {failing_port}" if isinstance(failing_port, int) else f"ports main={main_port}, testing={testing_port}"
-        )
-        if exc.errno == EADDRINUSE:
+        # ServerController.__init__ wraps bind failures in PortBindError with failing_port set;
+        # prefer failing_port when present for accurate port context in error messages.
+        if isinstance(exc, PortBindError):
+            port_context = f"port {exc.failing_port}"
+            if exc.errno == EADDRINUSE:
+                raise ConfigurationError(
+                    f"failed to bind API {port_context}: address already in use"
+                ) from exc
+            elif exc.errno == EACCES:
+                raise ConfigurationError(
+                    f"failed to bind API {port_context}: permission denied"
+                ) from exc
+            else:
+                raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
+        elif exc.errno == EADDRINUSE:
+            port_context = f"ports main={main_port}, testing={testing_port}"
             raise ConfigurationError(
                 f"failed to bind API {port_context}: address already in use"
             ) from exc
-        if exc.errno == EACCES:
+        elif exc.errno == EACCES:
+            port_context = f"ports main={main_port}, testing={testing_port}"
             raise ConfigurationError(
                 f"failed to bind API {port_context}: permission denied"
             ) from exc
-        raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
+        else:
+            raise
 
 
 def run() -> int:

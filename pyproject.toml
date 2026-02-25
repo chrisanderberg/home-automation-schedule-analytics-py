@@ -14,7 +14,8 @@ aggregation = [
   "Flask>=3.0.0",
 ]
 reporting = [
-  "dagster>=1.7.0",
+  "dagster>=1.7.0,<2.0.0",
+  "dagster-webserver>=1.7.0,<2.0.0",
 ]
 test = [
   "Flask>=3.0.0",

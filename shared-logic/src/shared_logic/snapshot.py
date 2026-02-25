@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from .paths import snapshot_root, test_snapshot_root
 
-SIDECAR_EXTS = ("-wal", "-shm", "-journal")
+_SIDECAR_EXTS = ("-wal", "-shm", "-journal")
 
 
 def export_snapshot(conn: sqlite3.Connection) -> Path:
@@ -40,8 +40,11 @@ def _cleanup_sidecars(path: Path) -> None:
     Returns:
         None.
     """
-    for ext in SIDECAR_EXTS:
-        path.with_name(path.name + ext).unlink(missing_ok=True)
+    for ext in _SIDECAR_EXTS:
+        try:
+            path.with_name(path.name + ext).unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
@@ -100,10 +103,14 @@ def _validate_name_component(value: str, label: str) -> str:
 
 
 def reset_test_db_files(db_path: Path) -> None:
-    """Remove test DB and SQLite sidecar files for reset endpoint."""
-    for candidate in (db_path, *(db_path.with_name(db_path.name + ext) for ext in SIDECAR_EXTS)):
+    """Remove test DB, SQLite sidecar files, and any related directories.
+
+    Deletes the given db_path and its sidecar variants (-wal, -shm, -journal).
+    Files are unlinked; directories are removed recursively (shutil.rmtree).
+    """
+    for candidate in (db_path, *(db_path.with_name(db_path.name + ext) for ext in _SIDECAR_EXTS)):
         if candidate.exists():
             if candidate.is_file():
-                candidate.unlink()
+                candidate.unlink(missing_ok=True)
             elif candidate.is_dir():
                 shutil.rmtree(candidate)

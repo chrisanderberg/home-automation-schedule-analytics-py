@@ -38,14 +38,14 @@ def split_interval_by_quarter_utc(start_ms: int, end_ms: int) -> list[QuarterSpa
     while cur < end_ms:
         dt = datetime.fromtimestamp(cur / 1000, tz=UTC)
         q_idx = _quarter_index_from_dt(dt)
-        quarter_number = (q_idx % 4) + 1
+        quarter_number = ((dt.month - 1) // 3) + 1
         next_q_month = (quarter_number * 3) + 1
         year = dt.year
         if next_q_month == 13:
             next_q_month = 1
             year += 1
         boundary_dt = datetime(year, next_q_month, 1, tzinfo=UTC)
-        boundary_ms = int(boundary_dt.timestamp() * 1000)
+        boundary_ms = int(round(boundary_dt.timestamp() * 1000))
         if boundary_ms > end_ms:
             boundary_ms = end_ms
         spans.append(QuarterSpan(quarter_index=q_idx, start_ms=cur, end_ms=boundary_ms))

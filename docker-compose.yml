@@ -5,8 +5,8 @@ services:
       dockerfile: aggregation/Dockerfile
     environment:
       HAA_TIMEZONE: UTC
-      HAA_LATITUDE: "REQUIRED"
-      HAA_LONGITUDE: "REQUIRED"
+      HAA_LATITUDE: ${HAA_LATITUDE:?HAA_LATITUDE is required - set numeric coordinate (e.g. 37.7749)}
+      HAA_LONGITUDE: ${HAA_LONGITUDE:?HAA_LONGITUDE is required - set numeric coordinate (e.g. -122.4194)}
       HAA_MAIN_PORT: "8080"
       HAA_TESTING_PORT: "8081"
     ports:
