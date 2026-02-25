@@ -136,6 +136,11 @@ def _post_json(url: str, payload: dict) -> tuple[int, dict]:
     Returns:
         Tuple of HTTP status code and parsed response dictionary.
     """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"_post_json requires http or https scheme, got: {parsed.scheme or '(empty)'}"
+        )
     req = urllib.request.Request(
         url=url,
         data=json.dumps(payload).encode("utf-8"),
@@ -188,7 +193,7 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
     try:
         snapshot_path = snapshot_path_fn()
     except RuntimeError as exc:
-        context.log.exception("snapshot lookup failed for %s: %s", label, exc)
+        context.log.exception("snapshot lookup failed for %s", label)
         raise Failure(
             description=f"snapshot lookup failed for {label}: {exc}",
             metadata={"snapshot_missing": True, "target": label},
@@ -204,7 +209,7 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
             cur.execute("SELECT COUNT(*) FROM aggregates")
             aggregates_count = cur.fetchone()[0]
     except sqlite3.DatabaseError as exc:
-        context.log.exception("sqlite read failed for %s: %s", label, exc)
+        context.log.exception("sqlite read failed for %s", label)
         raise Failure(
             description=f"snapshot read failed for {label}: {exc}",
             metadata={"snapshot_corrupt": True, "target": label},
@@ -342,7 +347,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
             controls_count = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
             aggregates_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
     except sqlite3.DatabaseError as exc:
-        context.log.exception("sqlite read failed for testing snapshot: %s", exc)
+        context.log.exception("sqlite read failed for testing snapshot")
         raise Failure(
             description=f"snapshot read failed for testing API validation: {exc}",
             metadata={"snapshot_corrupt": True, "target": f"{test_name}-{snapshot_name}"},

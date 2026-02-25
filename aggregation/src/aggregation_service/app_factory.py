@@ -33,6 +33,13 @@ def _is_int_not_bool(value: Any) -> bool:
     return type(value) is int
 
 
+def _validate_slug(value: Any, field: str) -> str:
+    """Validate that value is a valid slug string. Raises ValidationError if not."""
+    if not isinstance(value, str) or not is_valid_slug(value):
+        raise ValidationError(f"invalid {field}", field=field)
+    return value
+
+
 def _test_db_init_lock(test_name: str) -> threading.Lock:
     """Return a lock dedicated to one test DB initialization key."""
     with _test_db_init_locks_guard:
@@ -53,14 +60,11 @@ def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) 
     Returns:
         Tuple of validated `Control` and optional `testName`.
     """
-    test_name = data.get("testName") if require_test_name else None
+    test_name = _validate_slug(data.get("testName"), "testName") if require_test_name else None
     control_id = data.get("controlId", "")
     control_type = data.get("controlType", "")
     num_states = data.get("numStates")
     state_labels = data.get("stateLabels")
-
-    if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
-        raise ValidationError("invalid testName", field="testName")
     if not isinstance(control_id, str) or not control_id:
         raise ValidationError("invalid controlId")
     if control_type not in ("discrete", "slider"):
@@ -95,9 +99,7 @@ def _validate_holding_payload(data: dict[str, Any], *, require_test_name: bool) 
     Returns:
         Tuple of validated `HoldingInput` and optional `testName`.
     """
-    test_name = data.get("testName") if require_test_name else None
-    if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
-        raise ValidationError("invalid testName", field="testName")
+    test_name = _validate_slug(data.get("testName"), "testName") if require_test_name else None
 
     control_id = data.get("controlId")
     model_id = data.get("modelId")
@@ -138,9 +140,7 @@ def _validate_transition_payload(data: dict[str, Any], *, require_test_name: boo
     Returns:
         Tuple of validated `TransitionInput` and optional `testName`.
     """
-    test_name = data.get("testName") if require_test_name else None
-    if require_test_name and (not isinstance(test_name, str) or not is_valid_slug(test_name)):
-        raise ValidationError("invalid testName", field="testName")
+    test_name = _validate_slug(data.get("testName"), "testName") if require_test_name else None
 
     control_id = data.get("controlId")
     model_id = data.get("modelId")
@@ -498,12 +498,8 @@ def create_testing_app(cfg: Config) -> Flask:
         """
         def _action():
             payload = decode_strict_json(request, required=["testName", "snapshotName"])
-            test_name = payload["testName"]
-            snapshot_name = payload["snapshotName"]
-            if not isinstance(test_name, str) or not is_valid_slug(test_name):
-                raise ValidationError("invalid testName")
-            if not isinstance(snapshot_name, str) or not is_valid_slug(snapshot_name):
-                raise ValidationError("invalid snapshotName")
+            test_name = _validate_slug(payload["testName"], "testName")
+            snapshot_name = _validate_slug(payload["snapshotName"], "snapshotName")
             path: Path = _with_test_db(
                 test_name, lambda conn: export_snapshot_for_test(conn, test_name, snapshot_name)
             )
@@ -528,9 +524,7 @@ def create_testing_app(cfg: Config) -> Flask:
         """
         def _action():
             payload = decode_strict_json(request, required=["testName"])
-            test_name = payload["testName"]
-            if not isinstance(test_name, str) or not is_valid_slug(test_name):
-                raise ValidationError("invalid testName")
+            test_name = _validate_slug(payload["testName"], "testName")
             db_path = _test_db_path(test_name)
             with _test_db_init_lock(test_name):
                 reset_test_db_files(db_path)

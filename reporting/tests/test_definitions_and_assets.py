@@ -7,6 +7,7 @@ import importlib.util
 import os
 import urllib.error
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 HAS_DAGSTER = importlib.util.find_spec("dagster") is not None
@@ -96,6 +97,7 @@ class ReportingDagsterTests(unittest.TestCase):
 
     def test_testing_api_flow_fails_on_escaped_snapshot_path(self):
         # Regression: snapshot export returning 200 with escaped snapshotPath is rejected.
+        # Patch bootstrap/snapshot root so flow stops at escape check without importing shared_logic.
         context = build_asset_context()
         post_results = [
             (200, {"status": "ok"}),
@@ -106,9 +108,15 @@ class ReportingDagsterTests(unittest.TestCase):
             (200, {"snapshotPath": "../escape.sqlite"}),
         ]
         expected_post_calls = 6
+        safe_root = Path("/tmp/asset-test-snapshots")
         with patch("reporting_service.assets._post_json", side_effect=post_results) as mock_post:
-            with self.assertRaisesRegex(Failure, r"escapes"):
-                assets.testing_api_snapshot_validation(context)
+            with patch("reporting_service.assets._ensure_bootstrap"):
+                with patch(
+                    "reporting_service.assets._test_snapshot_root_fn",
+                    return_value=safe_root,
+                ):
+                    with self.assertRaisesRegex(Failure, r"escapes"):
+                        assets.testing_api_snapshot_validation(context)
         self.assertEqual(mock_post.call_count, expected_post_calls)
 
 
