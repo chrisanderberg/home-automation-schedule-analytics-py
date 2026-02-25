@@ -502,10 +502,9 @@ def create_testing_app(cfg: Config) -> Flask:
                 raise ValidationError("invalid testName")
             if not isinstance(snapshot_name, str) or not is_valid_slug(snapshot_name):
                 raise ValidationError("invalid snapshotName")
-            def _write(conn):
-                path = export_snapshot_for_test(conn, test_name, snapshot_name)
-                return path
-            path = _with_test_db(test_name, _write)
+            path = _with_test_db(
+                test_name, lambda conn: export_snapshot_for_test(conn, test_name, snapshot_name)
+            )
             return jsonify({"snapshotName": snapshot_name, "snapshotPath": str(path)}), 200
 
         return _handle_request(

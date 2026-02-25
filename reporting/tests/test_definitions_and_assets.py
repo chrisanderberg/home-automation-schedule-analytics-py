@@ -39,8 +39,8 @@ class ReportingDagsterTests(unittest.TestCase):
             else:
                 os.environ["HAA_REPORTING_TIMEZONE"] = original_reporting_tz
 
-        self.addCleanup(_restore_reporting_tz)
         self.addCleanup(lambda: importlib.reload(definitions_module))
+        self.addCleanup(_restore_reporting_tz)
         with patch.dict(
             os.environ,
             {"HAA_REPORTING_TIMEZONE": "America/Chicago", "HAA_TIMEZONE": "UTC"},

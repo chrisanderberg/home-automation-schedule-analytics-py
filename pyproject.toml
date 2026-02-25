@@ -27,5 +27,8 @@ dev = [
   "dagster>=1.7.0",
 ]
 
+[tool.ruff]
+extend-ignore = ["TRY003"]
+
 [tool.setuptools]
 packages = []

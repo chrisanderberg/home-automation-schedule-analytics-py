@@ -24,9 +24,21 @@ from dagster import (
 from reporting_service.bootstrap import ensure_repo_src_paths
 from reporting_service.http_json import decode_json_body
 
-ensure_repo_src_paths()
+_paths_initialized = False
+_repository_root_fn = _snapshot_root_fn = _test_snapshot_root_fn = None
 
-from shared_logic.paths import repository_root, snapshot_root, test_snapshot_root  # noqa: E402
+
+def _ensure_bootstrap() -> None:
+    """Run bootstrap once when paths are first needed."""
+    global _paths_initialized, _repository_root_fn, _snapshot_root_fn, _test_snapshot_root_fn
+    if not _paths_initialized:
+        ensure_repo_src_paths()
+        from shared_logic.paths import repository_root, snapshot_root, test_snapshot_root
+
+        _repository_root_fn = repository_root
+        _snapshot_root_fn = snapshot_root
+        _test_snapshot_root_fn = test_snapshot_root
+        _paths_initialized = True
 
 
 def _latest_snapshot_path_in_dir(root: Path) -> Path:
@@ -52,7 +64,8 @@ def _latest_snapshot_path() -> Path:
     Returns:
         Path to the newest production snapshot file.
     """
-    return _latest_snapshot_path_in_dir(snapshot_root())
+    _ensure_bootstrap()
+    return _latest_snapshot_path_in_dir(_snapshot_root_fn())
 
 
 def _latest_testing_snapshot_path() -> Path:
@@ -61,7 +74,8 @@ def _latest_testing_snapshot_path() -> Path:
     Returns:
         Path to the newest testing snapshot file.
     """
-    return _latest_snapshot_path_in_dir(test_snapshot_root())
+    _ensure_bootstrap()
+    return _latest_snapshot_path_in_dir(_test_snapshot_root_fn())
 
 
 def _testing_api_base_url() -> str:
@@ -176,12 +190,19 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
 
     context.log.info("using %s snapshot %s", label, snapshot_path)
 
-    with closing(sqlite3.connect(str(snapshot_path))) as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM controls")
-        controls_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM aggregates")
-        aggregates_count = cur.fetchone()[0]
+    try:
+        with closing(sqlite3.connect(str(snapshot_path))) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM controls")
+            controls_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM aggregates")
+            aggregates_count = cur.fetchone()[0]
+    except sqlite3.OperationalError as exc:
+        context.log.exception("sqlite read failed for %s: %s", label, exc)
+        raise Failure(
+            description=f"snapshot read failed for {label}: {exc}",
+            metadata={"snapshot_corrupt": True, "target": label},
+        ) from exc
 
     return MaterializeResult(
         metadata={
@@ -286,6 +307,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
         context.log.exception(message)
         raise Failure(description=message, metadata={"snapshot_missing": True}) from exc
 
+    _ensure_bootstrap()
     snapshot_path_raw = None
     for key in ("snapshotPath", "snapshot_path", "path", "filename"):
         value = payload.get(key)
@@ -293,7 +315,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
             snapshot_path_raw = value
             break
     if snapshot_path_raw is not None:
-        root = test_snapshot_root().resolve()
+        root = _test_snapshot_root_fn().resolve()
         candidate = (root / Path(snapshot_path_raw)).resolve()
         if not candidate.is_relative_to(root):
             raise Failure(
@@ -302,16 +324,23 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
             )
         snapshot_path = candidate
     else:
-        snapshot_path = test_snapshot_root() / f"{test_name}-{snapshot_name}-snapshot.sqlite"
+        snapshot_path = _test_snapshot_root_fn() / f"{test_name}-{snapshot_name}-snapshot.sqlite"
     if not snapshot_path.exists():
         raise Failure(
             description=f"expected snapshot not found after export: {snapshot_path}",
             metadata={"snapshot_missing": True, "snapshot_path": MetadataValue.path(snapshot_path)},
         )
 
-    with closing(sqlite3.connect(str(snapshot_path))) as conn:
-        controls_count = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
-        aggregates_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
+    try:
+        with closing(sqlite3.connect(str(snapshot_path))) as conn:
+            controls_count = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
+            aggregates_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
+    except sqlite3.OperationalError as exc:
+        context.log.exception("sqlite read failed for testing snapshot: %s", exc)
+        raise Failure(
+            description=f"snapshot read failed for testing API validation: {exc}",
+            metadata={"snapshot_corrupt": True, "target": f"{test_name}-{snapshot_name}"},
+        ) from exc
 
     if controls_count < 2:
         raise Failure(
@@ -326,7 +355,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
 
     return MaterializeResult(
         metadata={
-            "repository_root": MetadataValue.path(repository_root()),
+            "repository_root": MetadataValue.path(_repository_root_fn()),
             "testing_api_url": base_url,
             "snapshot_path": MetadataValue.path(snapshot_path),
             "controls_count": controls_count,
@@ -352,7 +381,10 @@ def snapshot_sensor(context: SensorEvaluationContext):
     except RuntimeError as exc:
         return SkipReason(str(exc))
 
-    mtime_ns = snapshot_path.stat().st_mtime_ns
+    try:
+        mtime_ns = snapshot_path.stat().st_mtime_ns
+    except FileNotFoundError:
+        return SkipReason("snapshot removed")
     try:
         last_seen = int(context.cursor) if context.cursor else -1
     except ValueError:
