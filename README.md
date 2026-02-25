@@ -23,6 +23,19 @@ make setup-reporting
 PYTHONPATH=shared-logic/src:reporting/src dagster dev -m reporting_service.definitions
 ```
 
+## Deploy with Docker Compose
+
+```bash
+export HAA_LATITUDE="37.7749"
+export HAA_LONGITUDE="-122.4194"
+docker compose up --build
+```
+
+- **Aggregation**: `http://localhost:8080`
+- **Reporting (Dagster UI)**: `http://localhost:3000`
+
+The reporting service runs `dagster dev`, which starts both **dagster-webserver** (UI) and **dagster-daemon** (schedules/sensors). Both require **DAGSTER_HOME** (`/app/.dagster`) for run history and SQLite state. The `app_dagster_home` volume is mounted at `/app/.dagster` so this state persists across container restarts. Without this mount, run history and schedule/sensor state would be ephemeral.
+
 ## Run tests
 
 ```bash

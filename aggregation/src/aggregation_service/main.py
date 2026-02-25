@@ -23,6 +23,9 @@ from shared_logic.contracts import Config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_MAIN_HOST = "0.0.0.0"
+_DEFAULT_TESTING_HOST = "127.0.0.1"
+
 
 class ConfigurationError(RuntimeError):
     """Raised when required runtime configuration is missing."""
@@ -53,8 +56,8 @@ class ServerController:
         main_port: int = 8080,
         testing_port: int = 8081,
         *,
-        main_host: str = "0.0.0.0",
-        testing_host: str = "127.0.0.1",
+        main_host: str = _DEFAULT_MAIN_HOST,
+        testing_host: str = _DEFAULT_TESTING_HOST,
     ):
         """Create both WSGI servers and thread wrappers.
 
@@ -75,6 +78,10 @@ class ServerController:
             raise PortBindError(main_port, exc) from exc
         try:
             testing_app = create_testing_app(cfg)
+        except Exception:
+            self.main_server.server_close()
+            raise
+        try:
             self.testing_server = make_server(testing_host, testing_port, testing_app)
         except OSError as exc:
             self.main_server.server_close()
@@ -218,17 +225,15 @@ def _load_ports() -> tuple[int, int]:
 def _load_bind_hosts() -> tuple[str, str]:
     """Load and validate bind host settings for the main and testing APIs.
 
-    Validates HAA_MAIN_HOST and HAA_TESTING_HOST: ensures non-empty after strip
-    and that each host can be resolved via socket.getaddrinfo. Raises
+    Validates HAA_MAIN_HOST and HAA_TESTING_HOST: ensures each host can be
+    resolved via socket.getaddrinfo. Raises
     ConfigurationError on failure so _create_server_controller sees configuration
     problems as ConfigurationError instead of raw OSError.
     """
-    main_host = os.getenv("HAA_MAIN_HOST", "0.0.0.0").strip() or "0.0.0.0"
-    testing_host = os.getenv("HAA_TESTING_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    main_host = os.getenv("HAA_MAIN_HOST", _DEFAULT_MAIN_HOST).strip() or _DEFAULT_MAIN_HOST
+    testing_host = os.getenv("HAA_TESTING_HOST", _DEFAULT_TESTING_HOST).strip() or _DEFAULT_TESTING_HOST
 
     for host, env_var in [(main_host, "HAA_MAIN_HOST"), (testing_host, "HAA_TESTING_HOST")]:
-        if not host:
-            raise ConfigurationError(f"invalid {env_var}: value must be non-empty after strip")
         try:
             socket.getaddrinfo(host, None)
         except OSError as exc:
@@ -244,8 +249,8 @@ def _create_server_controller(
     *,
     main_port: int,
     testing_port: int,
-    main_host: str = "0.0.0.0",
-    testing_host: str = "127.0.0.1",
+    main_host: str = _DEFAULT_MAIN_HOST,
+    testing_host: str = _DEFAULT_TESTING_HOST,
 ) -> ServerController:
     """Create a dual-server controller with explicit bind failure messaging.
 
@@ -293,7 +298,8 @@ def _create_server_controller(
                 f"failed to bind API {port_context}: permission denied"
             ) from exc
         else:
-            raise
+            port_context = f"ports main={main_port}, testing={testing_port}"
+            raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
 
 
 def run() -> int:

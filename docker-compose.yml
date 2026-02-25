@@ -30,6 +30,7 @@ services:
       dockerfile: reporting/Dockerfile
     environment:
       HAA_TESTING_API_URL: http://aggregation:8081
+      DAGSTER_HOME: /app/.dagster
     depends_on:
       aggregation:
         condition: service_healthy
@@ -38,7 +39,9 @@ services:
     volumes:
       - app_data:/app/data
       - app_test_data:/app/test-data
+      - app_dagster_home:/app/.dagster
 
 volumes:
   app_data:
   app_test_data:
+  app_dagster_home:
