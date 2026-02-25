@@ -21,9 +21,9 @@ def find_repo_root(start: Path) -> Path:
     safely pass Path(__file__); the function handles file inputs and returns
     a resolved directory Path representing the repository root.
     """
+    start = start.resolve()
     if start.is_file():
         start = start.parent
-    start = start.resolve()
     for parent in (start, *start.parents):
         if (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file() or (parent / ".git").exists():
             return parent

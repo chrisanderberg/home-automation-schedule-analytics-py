@@ -27,8 +27,8 @@ _test_db_init_locks_guard = threading.Lock()
 
 
 def _is_int_not_bool(value: Any) -> bool:
-    """Return True only for int, not bool (bool is a subclass of int)."""
-    return isinstance(value, int) and not isinstance(value, bool)
+    """Return True only for plain int, not bool or int subclasses."""
+    return type(value) is int
 
 
 def _test_db_init_lock(test_name: str) -> threading.Lock:
