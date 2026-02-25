@@ -7,7 +7,7 @@ import os
 import signal
 import threading
 import time
-from errno import EADDRINUSE
+from errno import EACCES, EADDRINUSE
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,7 +46,15 @@ class ServerThread:
 class ServerController:
     """Start and stop both API servers together."""
 
-    def __init__(self, cfg: Config, main_port: int = 8080, testing_port: int = 8081):
+    def __init__(
+        self,
+        cfg: Config,
+        main_port: int = 8080,
+        testing_port: int = 8081,
+        *,
+        main_host: str = "0.0.0.0",
+        testing_host: str = "127.0.0.1",
+    ):
         """Create both WSGI servers and thread wrappers.
 
         Args:
@@ -59,12 +67,12 @@ class ServerController:
         self._shutdown_started = False
         main_app = create_main_app(cfg)
         try:
-            self.main_server = make_server("0.0.0.0", main_port, main_app)
+            self.main_server = make_server(main_host, main_port, main_app)
         except OSError as exc:
             raise PortBindError(main_port, exc) from exc
         try:
             testing_app = create_testing_app(cfg)
-            self.testing_server = make_server("0.0.0.0", testing_port, testing_app)
+            self.testing_server = make_server(testing_host, testing_port, testing_app)
         except OSError as exc:
             self.main_server.server_close()
             raise PortBindError(testing_port, exc) from exc
@@ -204,7 +212,21 @@ def _load_ports() -> tuple[int, int]:
     return main_port, testing_port
 
 
-def _create_server_controller(cfg: Config, *, main_port: int, testing_port: int) -> ServerController:
+def _load_bind_hosts() -> tuple[str, str]:
+    """Load bind host settings for the main and testing APIs."""
+    main_host = os.getenv("HAA_MAIN_HOST", "0.0.0.0").strip() or "0.0.0.0"
+    testing_host = os.getenv("HAA_TESTING_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    return main_host, testing_host
+
+
+def _create_server_controller(
+    cfg: Config,
+    *,
+    main_port: int,
+    testing_port: int,
+    main_host: str = "0.0.0.0",
+    testing_host: str = "127.0.0.1",
+) -> ServerController:
     """Create a dual-server controller with explicit bind failure messaging.
 
     Args:
@@ -216,8 +238,17 @@ def _create_server_controller(cfg: Config, *, main_port: int, testing_port: int)
         Constructed `ServerController`.
     """
     try:
-        return ServerController(cfg, main_port=main_port, testing_port=testing_port)
+        return ServerController(
+            cfg,
+            main_port=main_port,
+            testing_port=testing_port,
+            main_host=main_host,
+            testing_host=testing_host,
+        )
     except OSError as exc:
+        is_bind_error = getattr(exc, "failing_port", None) is not None or exc.errno in {EADDRINUSE, EACCES}
+        if not is_bind_error:
+            raise
         failing_port = getattr(exc, "failing_port", None)
         port_context = (
             f"port {failing_port}" if isinstance(failing_port, int) else f"ports main={main_port}, testing={testing_port}"
@@ -225,6 +256,10 @@ def _create_server_controller(cfg: Config, *, main_port: int, testing_port: int)
         if exc.errno == EADDRINUSE:
             raise ConfigurationError(
                 f"failed to bind API {port_context}: address already in use"
+            ) from exc
+        if exc.errno == EACCES:
+            raise ConfigurationError(
+                f"failed to bind API {port_context}: permission denied"
             ) from exc
         raise ConfigurationError(f"failed to bind API {port_context}: {exc}") from exc
 
@@ -241,7 +276,14 @@ def run() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = _load_config()
     main_port, testing_port = _load_ports()
-    controller = _create_server_controller(cfg, main_port=main_port, testing_port=testing_port)
+    main_host, testing_host = _load_bind_hosts()
+    controller = _create_server_controller(
+        cfg,
+        main_port=main_port,
+        testing_port=testing_port,
+        main_host=main_host,
+        testing_host=testing_host,
+    )
 
     def _handle_signal(_signum, _frame):
         """Handle SIGINT/SIGTERM by requesting coordinated shutdown.
@@ -259,8 +301,8 @@ def run() -> int:
     signal.signal(signal.SIGTERM, _handle_signal)
 
     controller.start()
-    logger.info("main API listening on :%s", main_port)
-    logger.info("testing API listening on :%s", testing_port)
+    logger.info("main API listening on %s:%s", main_host, main_port)
+    logger.info("testing API listening on %s:%s", testing_host, testing_port)
 
     try:
         while controller.should_run():

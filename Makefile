@@ -1,7 +1,9 @@
 PYTHON ?= python3
 PYTHONPATH_BASE=$(CURDIR)/shared-logic/src:$(CURDIR)/aggregation/src:$(CURDIR)/reporting/src
 
-.PHONY: setup setup-test setup-aggregation setup-reporting setup-dev check-shared-test-deps check-aggregation-test-deps check-reporting-test-deps test test-shared test-aggregation test-reporting
+.PHONY: all clean setup setup-test setup-aggregation setup-reporting setup-dev check-shared-test-deps check-aggregation-test-deps check-reporting-test-deps test run-shared-tests run-aggregation-tests run-reporting-tests test-shared test-aggregation test-reporting
+
+all: setup
 
 setup: setup-test setup-aggregation setup-reporting
 
@@ -26,17 +28,21 @@ check-aggregation-test-deps:
 check-reporting-test-deps:
 	@PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -c "import dagster; from reporting_service.http_json import decode_json_body" >/dev/null 2>&1 || (echo "Missing reporting test dependency or import path. Run 'make setup' first."; exit 1)
 
-test: check-shared-test-deps check-aggregation-test-deps check-reporting-test-deps
-	@set +e; \
-	shared=0; aggregation=0; reporting=0; \
-	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/shared-logic/tests -p "test_*.py" || shared=$$?; \
-	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/aggregation/tests -p "test_*.py" || aggregation=$$?; \
-	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/reporting/tests -p "test_*.py" || reporting=$$?; \
-	if [ $$shared -ne 0 ] || [ $$aggregation -ne 0 ] || [ $$reporting -ne 0 ]; then \
-		echo "Test summary: shared=$$shared aggregation=$$aggregation reporting=$$reporting"; \
-		exit 1; \
-	fi; \
-	echo "Test summary: all suites passed"
+test: check-shared-test-deps check-aggregation-test-deps check-reporting-test-deps run-shared-tests run-aggregation-tests run-reporting-tests
+
+run-shared-tests:
+	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/shared-logic/tests -p "test_*.py"
+
+run-aggregation-tests:
+	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/aggregation/tests -p "test_*.py"
+
+run-reporting-tests:
+	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/reporting/tests -p "test_*.py"
+
+clean:
+	rm -rf .pytest_cache .ruff_cache .tmp_dagster_home_* .coverage
+	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
 
 test-shared: check-shared-test-deps
 	PYTHONPATH=$${PYTHONPATH:+$$PYTHONPATH:}$(PYTHONPATH_BASE) $(PYTHON) -m unittest discover -s $(CURDIR)/shared-logic/tests -p "test_*.py"

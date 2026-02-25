@@ -15,10 +15,15 @@ def _find_repo_root(start: Path) -> Path:
     Returns:
         Repository root path containing project sentinel files.
     """
-    for parent in (start, *start.parents):
-        if (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file() or (parent / ".git").exists():
-            return parent
-    raise RuntimeError(f"repository root not found from {start}")
+    # Keep aligned with aggregation_service.bootstrap._find_repo_root.
+    try:
+        return next(
+            parent
+            for parent in (start, *start.parents)
+            if (parent / "pyproject.toml").is_file() or (parent / "setup.cfg").is_file() or (parent / ".git").exists()
+        )
+    except StopIteration as e:
+        raise RuntimeError("repository root not found") from e
 
 
 def ensure_repo_src_paths() -> None:
@@ -28,7 +33,6 @@ def ensure_repo_src_paths() -> None:
     candidates = [
         repo_root / "shared-logic" / "src",
         repo_root / "reporting" / "src",
-        repo_root / "aggregation" / "src",
     ]
     # First candidate should have highest import precedence.
     for path in reversed(candidates):

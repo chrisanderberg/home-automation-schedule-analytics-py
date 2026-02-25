@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .blob import MAX_STATES, MIN_STATES
+
 __all__ = [
     "Config",
     "Control",
@@ -42,8 +44,8 @@ class Control:
 
     def __post_init__(self) -> None:
         """Validate control metadata invariants."""
-        if self.num_states < 1:
-            raise ValueError("num_states must be >= 1")
+        if self.num_states < MIN_STATES or self.num_states > MAX_STATES:
+            raise ValueError(f"num_states must be in [{MIN_STATES}, {MAX_STATES}]")
         if self.state_labels is not None and len(self.state_labels) != self.num_states:
             raise ValueError("len(state_labels) must equal num_states")
 
@@ -69,6 +71,8 @@ class HoldingInput:
 
     def __post_init__(self) -> None:
         """Validate half-open interval shape."""
+        if self.state < 0:
+            raise ValueError("state must be non-negative")
         if self.end_time_ms <= self.start_time_ms:
             raise ValueError("end_time_ms must be greater than start_time_ms")
 

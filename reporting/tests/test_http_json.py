@@ -2,7 +2,7 @@
 
 import unittest
 
-from reporting_service.http_json import decode_json_body
+from reporting_service.http_json import MAX_ERROR_BODY_CHARS, TRUNCATION_SUFFIX, decode_json_body
 
 
 class HttpJsonTests(unittest.TestCase):
@@ -31,6 +31,15 @@ class HttpJsonTests(unittest.TestCase):
         # Verifies empty body raises consistently with other invalid JSON payloads.
         with self.assertRaises(ValueError):
             decode_json_body("", decode_error_as_error_payload=False)
+
+    def test_decode_invalid_truncates_long_error_payload(self):
+        # Verifies invalid payload errors are bounded and suffixed when too long.
+        invalid = "x" * (MAX_ERROR_BODY_CHARS + 50)
+        expected = invalid[: MAX_ERROR_BODY_CHARS - len(TRUNCATION_SUFFIX)] + TRUNCATION_SUFFIX
+        self.assertEqual(
+            decode_json_body(invalid, decode_error_as_error_payload=True),
+            {"error": expected},
+        )
 
 
 if __name__ == "__main__":

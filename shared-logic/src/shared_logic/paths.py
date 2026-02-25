@@ -1,5 +1,6 @@
 """Path resolution utilities for runtime contracts."""
 
+import functools
 import os
 from pathlib import Path
 
@@ -21,6 +22,7 @@ def _find_repo_root_from(start: Path) -> Path | None:
     return None
 
 
+@functools.lru_cache(maxsize=1)
 def repository_root() -> Path:
     """Locate repository root from this module path."""
     for start in (Path(__file__).resolve(), Path.cwd().resolve()):

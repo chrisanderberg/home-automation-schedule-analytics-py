@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from .paths import snapshot_root, test_snapshot_root
 
+SIDECAR_EXTS = ("-wal", "-shm", "-journal")
+
 
 def export_snapshot(conn: sqlite3.Connection) -> Path:
     """Write timestamped production snapshot under data/snapshots."""
@@ -38,7 +40,7 @@ def _cleanup_sidecars(path: Path) -> None:
     Returns:
         None.
     """
-    for ext in ("-wal", "-shm", "-journal"):
+    for ext in SIDECAR_EXTS:
         path.with_name(path.name + ext).unlink(missing_ok=True)
 
 
@@ -99,12 +101,7 @@ def _validate_name_component(value: str, label: str) -> str:
 
 def reset_test_db_files(db_path: Path) -> None:
     """Remove test DB and SQLite sidecar files for reset endpoint."""
-    for candidate in (
-        db_path,
-        Path(str(db_path) + "-wal"),
-        Path(str(db_path) + "-shm"),
-        Path(str(db_path) + "-journal"),
-    ):
+    for candidate in (db_path, *(db_path.with_name(db_path.name + ext) for ext in SIDECAR_EXTS)):
         if candidate.exists():
             if candidate.is_file():
                 candidate.unlink()

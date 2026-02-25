@@ -28,7 +28,7 @@ def quarter_index_utc(timestamp_ms: int) -> int:
     return _quarter_index_from_dt(dt)
 
 
-def split_interval_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
+def split_interval_by_quarter_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
     """Split [start_ms, end_ms) at UTC quarter boundaries."""
     if end_ms <= start_ms:
         raise ValueError("invalid interval")

@@ -22,7 +22,7 @@ ENV HOME=/home/app
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=3).status == 200 else 1)"
+  CMD sh -c 'python -c "import os, sys, urllib.request; port = os.getenv(\"HAA_MAIN_PORT\", \"8080\"); url = f\"http://127.0.0.1:{port}/v1/health\"; sys.exit(0 if urllib.request.urlopen(url, timeout=3).status == 200 else 1)"'
 
 USER app
 

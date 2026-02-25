@@ -202,22 +202,27 @@ def _open_test_db(test_name: str):
     Returns:
         Tuple of `(connection, db_path)` for the test database.
     """
+    with _test_db_init_lock(test_name):
+        return _open_test_db_locked(test_name)
+
+
+def _open_test_db_locked(test_name: str):
+    """Open and initialize a per-test database while holding the per-test lock."""
     db_path = _test_db_path(test_name)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with _test_db_init_lock(test_name):
+    with _initialized_test_dbs_lock:
+        initialized = test_name in _initialized_test_dbs
+    should_init_schema = (not initialized) or (not db_path.exists())
+    conn = open_db(db_path)
+    if should_init_schema:
+        try:
+            init_schema(conn)
+        except Exception:
+            conn.close()
+            raise
         with _initialized_test_dbs_lock:
-            initialized = test_name in _initialized_test_dbs
-        should_init_schema = (not initialized) or (not db_path.exists())
-        conn = open_db(db_path)
-        if should_init_schema:
-            try:
-                init_schema(conn)
-            except Exception:
-                conn.close()
-                raise
-            with _initialized_test_dbs_lock:
-                _initialized_test_dbs.add(test_name)
-        return conn, db_path
+            _initialized_test_dbs.add(test_name)
+    return conn, db_path
 
 
 def _test_db_path(test_name: str) -> Path:
@@ -234,11 +239,12 @@ def _test_db_path(test_name: str) -> Path:
 
 def _with_test_db(test_name: str, fn: Callable[[Any], Any]) -> Any:
     """Open/close a test DB connection around one operation."""
-    conn, _ = _open_test_db(test_name)
-    try:
-        return fn(conn)
-    finally:
-        conn.close()
+    with _test_db_init_lock(test_name):
+        conn, _ = _open_test_db_locked(test_name)
+        try:
+            return fn(conn)
+        finally:
+            conn.close()
 
 
 def _handle_request(
@@ -533,9 +539,10 @@ def create_testing_app(cfg: Config) -> Flask:
             if not isinstance(test_name, str) or not is_valid_slug(test_name):
                 raise ValidationError("invalid testName")
             db_path = _test_db_path(test_name)
-            reset_test_db_files(db_path)
-            with _initialized_test_dbs_lock:
-                _initialized_test_dbs.discard(test_name)
+            with _test_db_init_lock(test_name):
+                reset_test_db_files(db_path)
+                with _initialized_test_dbs_lock:
+                    _initialized_test_dbs.discard(test_name)
             return jsonify({"status": "ok"}), 200
 
         return _handle_request(app, _action, log_message="testing reset endpoint failed")

@@ -2,7 +2,7 @@
 
 import unittest
 
-from shared_logic.quarter import quarter_index_utc, split_interval_utc
+from shared_logic.quarter import quarter_index_utc, split_interval_by_quarter_utc
 
 
 class QuarterTests(unittest.TestCase):
@@ -15,7 +15,7 @@ class QuarterTests(unittest.TestCase):
         # 2024-03-31 23:59:00 UTC to 2024-04-01 00:01:00 UTC
         start_ms = 1711929540000
         end_ms = 1711929660000
-        spans = split_interval_utc(start_ms, end_ms)
+        spans = split_interval_by_quarter_utc(start_ms, end_ms)
         self.assertEqual(len(spans), 2)
         self.assertEqual(spans[0].quarter_index, 216)  # 2024 Q1
         self.assertEqual(spans[1].quarter_index, 217)  # 2024 Q2
@@ -24,7 +24,7 @@ class QuarterTests(unittest.TestCase):
         # Verifies a same-quarter interval yields exactly one span.
         start_ms = 1710043200000  # 2024-03-10T04:00:00Z
         end_ms = 1710046800000  # 2024-03-10T05:00:00Z
-        spans = split_interval_utc(start_ms, end_ms)
+        spans = split_interval_by_quarter_utc(start_ms, end_ms)
         self.assertEqual(len(spans), 1)
         self.assertEqual(spans[0].quarter_index, 216)
 
@@ -32,7 +32,7 @@ class QuarterTests(unittest.TestCase):
         # Verifies intervals crossing 3+ quarters produce increasing quarter indices.
         start_ms = 1711929540000  # 2024-03-31T23:59:00Z (Q1)
         end_ms = 1735689660000  # 2025-01-01T00:01:00Z (spans Q1 2024 -> Q1 2025)
-        spans = split_interval_utc(start_ms, end_ms)
+        spans = split_interval_by_quarter_utc(start_ms, end_ms)
         self.assertEqual(len(spans), 5)
         indices = [span.quarter_index for span in spans]
         for i in range(1, len(indices)):
@@ -41,12 +41,12 @@ class QuarterTests(unittest.TestCase):
     def test_split_rejects_zero_length_interval(self):
         # Verifies zero-length intervals are rejected.
         with self.assertRaises(ValueError):
-            split_interval_utc(1710043200000, 1710043200000)
+            split_interval_by_quarter_utc(1710043200000, 1710043200000)
 
     def test_split_rejects_inverted_interval(self):
         # Verifies end-before-start intervals are rejected.
         with self.assertRaises(ValueError):
-            split_interval_utc(1710046800000, 1710043200000)
+            split_interval_by_quarter_utc(1710046800000, 1710043200000)
 
 
 if __name__ == "__main__":

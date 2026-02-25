@@ -29,7 +29,7 @@ from .bucketing import (
 )
 from .contracts import AggregateKey, Config, HoldingInput, TransitionInput
 from .errors import NotFoundError, UndefinedClockError, ValidationError
-from .quarter import quarter_index_utc, split_interval_utc as split_quarter_interval_utc
+from .quarter import quarter_index_utc, split_interval_by_quarter_utc
 from .storage import get_control, update_aggregate
 
 
@@ -79,7 +79,7 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
     if input_data.state >= control.num_states:
         raise ValidationError("invalid input")
 
-    quarter_spans = split_quarter_interval_utc(input_data.start_time_ms, input_data.end_time_ms)
+    quarter_spans = split_interval_by_quarter_utc(input_data.start_time_ms, input_data.end_time_ms)
 
     for q_span in quarter_spans:
         key = AggregateKey(control_id=input_data.control_id, model_id=input_data.model_id, quarter_index=q_span.quarter_index)

@@ -286,9 +286,14 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
             snapshot_path_raw = value
             break
     if snapshot_path_raw is not None:
-        snapshot_path = Path(snapshot_path_raw)
-        if not snapshot_path.is_absolute():
-            snapshot_path = test_snapshot_root() / snapshot_path
+        root = test_snapshot_root().resolve()
+        candidate = (root / Path(snapshot_path_raw)).resolve()
+        if not candidate.is_relative_to(root):
+            raise Failure(
+                description=f"snapshot path escapes test snapshot root: {snapshot_path_raw}",
+                metadata={"snapshot_missing": True, "snapshot_path": snapshot_path_raw},
+            )
+        snapshot_path = candidate
     else:
         snapshot_path = test_snapshot_root() / f"{test_name}-{snapshot_name}-snapshot.sqlite"
     if not snapshot_path.exists():

@@ -12,16 +12,12 @@ data/*.db
 data/*.dump
 data/snapshots/*
 !data/snapshots/.gitkeep
-data/snapshots/*.sqlite
-data/snapshots/*.sqlite-*
 test-data/*.sqlite
 test-data/*.sqlite-*
 test-data/*.db
 test-data/*.dump
 test-data/snapshots/*
 !test-data/snapshots/.gitkeep
-test-data/snapshots/*.sqlite
-test-data/snapshots/*.sqlite-*
 
 # dagster local runtime state
 .tmp_dagster_home_*/

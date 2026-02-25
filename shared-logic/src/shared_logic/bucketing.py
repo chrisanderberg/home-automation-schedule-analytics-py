@@ -287,36 +287,7 @@ def bucket_at_apparent_solar(timestamp_ms: int, latitude: float, longitude: floa
 def bucket_at_unequal_hours(timestamp_ms: int, latitude: float, longitude: float) -> int:
     """Map timestamp to unequal-hours bucket (raises UndefinedClockError near polar extremes)."""
     _validate_coordinates(latitude, longitude)
-    dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
-    offset_minutes = longitude * 4 + _equation_of_time_minutes(dt)
-    adj = dt + timedelta(minutes=offset_minutes)
-
-    day_start = datetime(adj.year, adj.month, adj.day, tzinfo=UTC)
-    solar_minutes = (adj - day_start).total_seconds() / 60
-    if solar_minutes < 0:
-        solar_minutes += 1440
-
-    sunrise, sunset = _sunrise_sunset_solar_minutes(day_start, latitude)
-    day_length = sunset - sunrise
-    night_length = 1440 - day_length
-    if day_length <= 0 or night_length <= 0:
-        raise UndefinedClockError("clock mapping undefined")
-
-    if sunrise <= solar_minutes < sunset:
-        day_fraction = (solar_minutes - sunrise) / day_length
-        pseudo_minutes = 360 + day_fraction * 720
-    else:
-        if solar_minutes >= sunset:
-            night_fraction = (solar_minutes - sunset) / night_length
-        else:
-            night_fraction = (solar_minutes + 1440 - sunset) / night_length
-        pseudo_minutes = 1080 + night_fraction * 720
-        if pseudo_minutes >= 1440:
-            pseudo_minutes -= 1440
-
-    bucket_within_day = int(pseudo_minutes) // 5
-    day_index = adj.weekday()
-    return day_index * BUCKETS_PER_DAY + bucket_within_day
+    return _bucket_at_unequal_hours_unchecked(timestamp_ms, latitude, longitude)
 
 
 def _bucket_at_unequal_hours_unchecked(timestamp_ms: int, latitude: float, longitude: float) -> int:

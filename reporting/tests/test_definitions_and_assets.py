@@ -81,7 +81,7 @@ class ReportingDagsterTests(unittest.TestCase):
         ]
         expected_post_calls = 6
         with patch("reporting_service.assets._post_json", side_effect=post_results) as mock_post:
-            with self.assertRaisesRegex(RuntimeError, "snapshot export failed"):
+            with self.assertRaisesRegex(Failure, "snapshot export failed"):
                 assets.testing_api_snapshot_validation(context)
         self.assertEqual(mock_post.call_count, expected_post_calls)
 
