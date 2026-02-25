@@ -1,0 +1,4 @@
+load_from:
+  - python_module:
+      module_name: reporting_service.definitions
+      location_name: reporting_service

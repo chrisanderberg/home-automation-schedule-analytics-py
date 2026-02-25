@@ -1,0 +1,22 @@
+# Override for external Postgres: disables the local dagster_postgres service.
+# When DAGSTER_PG_HOST points to an external DB, copy this file to
+# docker-compose.override.yml so the local dagster_postgres service is not started.
+#
+#   cp docker-compose.override-external-db.yml.example docker-compose.override.yml
+#
+# Ensure .env has DAGSTER_PG_HOST, DAGSTER_PG_PORT, DAGSTER_PG_DB, DAGSTER_PG_USERNAME,
+# and DAGSTER_PG_PASSWORD set for your external Postgres instance.
+
+services:
+  dagster_postgres:
+    profiles:
+      - "local-db"
+    # Only starts with: docker compose --profile local-db up
+    # Omit the profile when using external DB.
+
+  reporting:
+    depends_on:
+      aggregation:
+        condition: service_healthy
+    # Explicitly omits dagster_postgres so reporting can start without
+    # waiting for the local Postgres service when using external DB.

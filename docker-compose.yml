@@ -1,0 +1,71 @@
+services:
+  aggregation:
+    build:
+      context: .
+      dockerfile: aggregation/Dockerfile
+    environment:
+      HAA_TIMEZONE: UTC
+      HAA_LATITUDE: ${HAA_LATITUDE:?HAA_LATITUDE is required - set numeric coordinate (e.g. 37.7749)}
+      HAA_LONGITUDE: ${HAA_LONGITUDE:?HAA_LONGITUDE is required - set numeric coordinate (e.g. -122.4194)}
+      HAA_MAIN_HOST: "0.0.0.0"
+      HAA_TESTING_HOST: "0.0.0.0"
+      HAA_MAIN_PORT: "8080"
+      HAA_TESTING_PORT: "8081"
+    ports:
+      - "8080:8080"
+    # Keep testing API internal; reporting reaches it via aggregation:8081 on the Docker network.
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - app_data:/app/data
+      - app_test_data:/app/test-data
+
+  reporting:
+    build:
+      context: .
+      dockerfile: reporting/Dockerfile
+    environment:
+      HAA_TESTING_API_URL: http://aggregation:8081
+      DAGSTER_HOME: /app/.dagster
+      DAGSTER_PG_USERNAME: ${DAGSTER_PG_USERNAME:-dagster}
+      DAGSTER_PG_PASSWORD: ${DAGSTER_PG_PASSWORD:?DAGSTER_PG_PASSWORD is required}
+      DAGSTER_PG_HOST: ${DAGSTER_PG_HOST:-dagster_postgres}
+      DAGSTER_PG_DB: ${DAGSTER_PG_DB:-dagster}
+      DAGSTER_PG_PORT: ${DAGSTER_PG_PORT:-5432}
+    depends_on:
+      aggregation:
+        condition: service_healthy
+      dagster_postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_data:/app/data
+      - app_test_data:/app/test-data
+      - app_dagster_home:/app/.dagster
+
+  dagster_postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DAGSTER_PG_USERNAME:-dagster}
+      POSTGRES_PASSWORD: ${DAGSTER_PG_PASSWORD:?DAGSTER_PG_PASSWORD is required}
+      POSTGRES_DB: ${DAGSTER_PG_DB:-dagster}
+    volumes:
+      - dagster_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  app_data:
+  app_test_data:
+  app_dagster_home:
+  dagster_postgres_data:
