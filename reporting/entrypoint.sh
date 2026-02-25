@@ -19,7 +19,7 @@ for f in workspace.yaml dagster.yaml; do
 done
 for dir in "$dagster_home" /app/data; do
   if [ -d "$dir" ]; then
-    chown -R appuser:appuser "$dir" || { _ec=$?; echo "warning: chown -R appuser:appuser $dir failed (exit $_ec)" >&2; }
+    chown -R appuser:appuser "$dir" || { _ec=$?; echo "error: chown -R appuser:appuser $dir failed (exit $_ec)" >&2; exit "$_ec"; }
     find "$dir" -type d -exec chmod 0750 {} + || { _ec=$?; echo "warning: chmod 0750 on directories under $dir failed (exit $_ec)" >&2; }
     find "$dir" -type f -exec chmod 0640 {} + || { _ec=$?; echo "warning: chmod 0640 on files under $dir failed (exit $_ec)" >&2; }
   fi
