@@ -13,18 +13,18 @@ env/*.local
 *.egg-info/
 
 # runtime sqlite artifacts
-data/*.sqlite
-data/*.sqlite-*
-data/*.db
-data/*.dump
-data/snapshots/*
-!data/snapshots/.gitkeep
-test-data/*.sqlite
-test-data/*.sqlite-*
-test-data/*.db
-test-data/*.dump
-test-data/snapshots/*
-!test-data/snapshots/.gitkeep
+data/**/*.sqlite
+data/**/*.sqlite-*
+data/**/*.db
+data/**/*.dump
+data/**/snapshots/*
+!data/**/snapshots/.gitkeep
+test-data/**/*.sqlite
+test-data/**/*.sqlite-*
+test-data/**/*.db
+test-data/**/*.dump
+test-data/**/snapshots/*
+!test-data/**/snapshots/.gitkeep
 
 # dagster local runtime state
 .tmp_dagster_home_*/

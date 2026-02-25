@@ -26,6 +26,11 @@ _test_db_init_locks: dict[str, threading.Lock] = {}
 _test_db_init_locks_guard = threading.Lock()
 
 
+def _is_int_not_bool(value: Any) -> bool:
+    """Return True only for int, not bool (bool is a subclass of int)."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _test_db_init_lock(test_name: str) -> threading.Lock:
     """Return a lock dedicated to one test DB initialization key."""
     with _test_db_init_locks_guard:
@@ -58,7 +63,7 @@ def _validate_control_payload(data: dict[str, Any], *, require_test_name: bool) 
         raise ValidationError("invalid controlId")
     if control_type not in ("discrete", "slider"):
         raise ValidationError("invalid controlType")
-    if not isinstance(num_states, int) or num_states < 2 or num_states > 10:
+    if not _is_int_not_bool(num_states) or num_states < 2 or num_states > 10:
         raise ValidationError("invalid numStates")
     if state_labels is not None:
         if not isinstance(state_labels, list) or not all(isinstance(x, str) for x in state_labels):
@@ -101,11 +106,11 @@ def _validate_holding_payload(data: dict[str, Any], *, require_test_name: bool) 
         raise ValidationError("invalid controlId")
     if not isinstance(model_id, str) or not model_id:
         raise ValidationError("invalid modelId")
-    if not isinstance(state, int):
+    if not _is_int_not_bool(state):
         raise ValidationError("invalid state")
-    if not isinstance(start_time_ms, int):
+    if not _is_int_not_bool(start_time_ms):
         raise ValidationError("invalid startTimeMs")
-    if not isinstance(end_time_ms, int):
+    if not _is_int_not_bool(end_time_ms):
         raise ValidationError("invalid endTimeMs")
 
     try:
@@ -144,11 +149,11 @@ def _validate_transition_payload(data: dict[str, Any], *, require_test_name: boo
         raise ValidationError("invalid controlId")
     if not isinstance(model_id, str) or not model_id:
         raise ValidationError("invalid modelId")
-    if not isinstance(from_state, int):
+    if not _is_int_not_bool(from_state):
         raise ValidationError("invalid fromState")
-    if not isinstance(to_state, int):
+    if not _is_int_not_bool(to_state):
         raise ValidationError("invalid toState")
-    if not isinstance(timestamp_ms, int):
+    if not _is_int_not_bool(timestamp_ms):
         raise ValidationError("invalid timestampMs")
 
     try:

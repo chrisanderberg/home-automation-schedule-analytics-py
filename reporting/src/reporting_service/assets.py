@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import urllib.error
+import urllib.parse
 import urllib.request
 from contextlib import closing
 from pathlib import Path
@@ -72,7 +73,13 @@ def _testing_api_base_url() -> str:
     Returns:
         Base URL string without trailing slash.
     """
-    return os.getenv("HAA_TESTING_API_URL", "http://127.0.0.1:8081").rstrip("/")
+    raw = os.getenv("HAA_TESTING_API_URL", "http://127.0.0.1:8081").rstrip("/")
+    parsed = urllib.parse.urlparse(raw)
+    if not parsed.scheme or parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"HAA_TESTING_API_URL must use http or https scheme, got: {parsed.scheme or '(empty)'}"
+        )
+    return raw
 
 
 def _testing_flow_test_name() -> str:

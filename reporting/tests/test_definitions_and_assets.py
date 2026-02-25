@@ -94,6 +94,23 @@ class ReportingDagsterTests(unittest.TestCase):
                 assets.testing_api_snapshot_validation(context)
         self.assertEqual(mock_post.call_count, expected_post_calls)
 
+    def test_testing_api_flow_fails_on_escaped_snapshot_path(self):
+        # Regression: snapshot export returning 200 with escaped snapshotPath is rejected.
+        context = build_asset_context()
+        post_results = [
+            (200, {"status": "ok"}),
+            (202, {"status": "accepted"}),
+            (202, {"status": "accepted"}),
+            (202, {"status": "accepted"}),
+            (202, {"status": "accepted"}),
+            (200, {"snapshotPath": "../escape.sqlite"}),
+        ]
+        expected_post_calls = 6
+        with patch("reporting_service.assets._post_json", side_effect=post_results) as mock_post:
+            with self.assertRaisesRegex(Failure, r"escapes"):
+                assets.testing_api_snapshot_validation(context)
+        self.assertEqual(mock_post.call_count, expected_post_calls)
+
 
 if __name__ == "__main__":
     unittest.main()
