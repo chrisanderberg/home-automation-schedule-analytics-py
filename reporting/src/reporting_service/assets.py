@@ -25,24 +25,26 @@ from dagster import (
 from reporting_service.bootstrap import ensure_repo_src_paths
 from reporting_service.http_json import decode_json_body
 
-_paths_initialized = False
+_paths_initialized_event = threading.Event()
 _paths_init_lock = threading.Lock()
 _repository_root_fn = _snapshot_root_fn = _test_snapshot_root_fn = None
 
 
 def _ensure_bootstrap() -> None:
     """Run bootstrap once when paths are first needed."""
-    global _paths_initialized, _repository_root_fn, _snapshot_root_fn, _test_snapshot_root_fn
-    if not _paths_initialized:
-        with _paths_init_lock:
-            if not _paths_initialized:
-                ensure_repo_src_paths()
-                from shared_logic.paths import repository_root, snapshot_root, test_snapshot_root
+    global _repository_root_fn, _snapshot_root_fn, _test_snapshot_root_fn
+    if _paths_initialized_event.is_set():
+        return
+    with _paths_init_lock:
+        if _paths_initialized_event.is_set():
+            return
+        ensure_repo_src_paths()
+        from shared_logic.paths import repository_root, snapshot_root, test_snapshot_root
 
-                _repository_root_fn = repository_root
-                _snapshot_root_fn = snapshot_root
-                _test_snapshot_root_fn = test_snapshot_root
-                _paths_initialized = True
+        _repository_root_fn = repository_root
+        _snapshot_root_fn = snapshot_root
+        _test_snapshot_root_fn = test_snapshot_root
+        _paths_initialized_event.set()
 
 
 def _latest_snapshot_path_in_dir(root: Path) -> Path:
