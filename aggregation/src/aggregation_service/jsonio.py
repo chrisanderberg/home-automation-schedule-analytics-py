@@ -20,7 +20,7 @@ def decode_strict_json(request: Request, required: Iterable[str], optional: Iter
         raise BadRequestError("Content-Type must be application/json")
     try:
         data = request.get_json(silent=False)
-    except (json.JSONDecodeError, UnicodeDecodeError, BadRequest, ValueError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, BadRequest) as exc:
         raise BadRequestError("invalid json body") from exc
     if not isinstance(data, dict):
         raise BadRequestError("JSON payload must be an object")

@@ -33,9 +33,9 @@ def find_repo_root(start: Path) -> Path:
 def ensure_repo_src_paths_for_service(service_name: str, here: Path) -> None:
     """Add local src roots to sys.path for direct execution.
 
-    Pass the directory containing the entrypoint (e.g., Path(__file__).parent)
-    as a stylistic convention. find_repo_root also accepts a file path and
-    normalizes it to its parent before walking upward.
+    Preferred input: the directory containing the entrypoint (e.g.,
+    Path(__file__).parent). find_repo_root also accepts file paths and
+    normalizes them to their parent before walking upward.
 
     Service src has higher import precedence than shared-logic.
     """
@@ -45,7 +45,7 @@ def ensure_repo_src_paths_for_service(service_name: str, here: Path) -> None:
         repo_root / service_name / "src",
     ]
     # Insert in front so the last valid candidate wins (highest precedence);
-    # each sys.path.insert(0, path_str) pushes earlier entries right.
+    # each sys.path.insert(0, path_str) pushes previously inserted paths right.
     for path in candidates:
         path_str = str(path)
         if path.exists() and path_str not in sys.path:
