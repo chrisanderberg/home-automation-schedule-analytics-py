@@ -6,7 +6,7 @@ import os
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from flask import Flask, g, jsonify, request
 
@@ -24,6 +24,8 @@ _initialized_test_dbs: set[str] = set()
 _initialized_test_dbs_lock = threading.Lock()
 _test_db_init_locks: dict[str, threading.Lock] = {}
 _test_db_init_locks_guard = threading.Lock()
+
+_T = TypeVar("_T")
 
 
 def _is_int_not_bool(value: Any) -> bool:
@@ -229,7 +231,7 @@ def _test_db_path(test_name: str) -> Path:
     return test_data_root() / f"{test_name}-test-data.sqlite"
 
 
-def _with_test_db(test_name: str, fn: Callable[[Any], Any]) -> Any:
+def _with_test_db(test_name: str, fn: Callable[[Any], _T]) -> _T:
     """Open/close a test DB connection around one operation."""
     with _test_db_init_lock(test_name):
         conn, _ = _open_test_db_locked(test_name)
@@ -502,7 +504,7 @@ def create_testing_app(cfg: Config) -> Flask:
                 raise ValidationError("invalid testName")
             if not isinstance(snapshot_name, str) or not is_valid_slug(snapshot_name):
                 raise ValidationError("invalid snapshotName")
-            path = _with_test_db(
+            path: Path = _with_test_db(
                 test_name, lambda conn: export_snapshot_for_test(conn, test_name, snapshot_name)
             )
             return jsonify({"snapshotName": snapshot_name, "snapshotPath": str(path)}), 200

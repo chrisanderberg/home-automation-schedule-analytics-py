@@ -3,6 +3,7 @@
 import json
 import os
 import sqlite3
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -25,6 +26,7 @@ from reporting_service.bootstrap import ensure_repo_src_paths
 from reporting_service.http_json import decode_json_body
 
 _paths_initialized = False
+_paths_init_lock = threading.Lock()
 _repository_root_fn = _snapshot_root_fn = _test_snapshot_root_fn = None
 
 
@@ -32,13 +34,15 @@ def _ensure_bootstrap() -> None:
     """Run bootstrap once when paths are first needed."""
     global _paths_initialized, _repository_root_fn, _snapshot_root_fn, _test_snapshot_root_fn
     if not _paths_initialized:
-        ensure_repo_src_paths()
-        from shared_logic.paths import repository_root, snapshot_root, test_snapshot_root
+        with _paths_init_lock:
+            if not _paths_initialized:
+                ensure_repo_src_paths()
+                from shared_logic.paths import repository_root, snapshot_root, test_snapshot_root
 
-        _repository_root_fn = repository_root
-        _snapshot_root_fn = snapshot_root
-        _test_snapshot_root_fn = test_snapshot_root
-        _paths_initialized = True
+                _repository_root_fn = repository_root
+                _snapshot_root_fn = snapshot_root
+                _test_snapshot_root_fn = test_snapshot_root
+                _paths_initialized = True
 
 
 def _latest_snapshot_path_in_dir(root: Path) -> Path:
@@ -197,7 +201,7 @@ def _summarize_snapshot(context: AssetExecutionContext, snapshot_path_fn, label:
             controls_count = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM aggregates")
             aggregates_count = cur.fetchone()[0]
-    except sqlite3.OperationalError as exc:
+    except sqlite3.DatabaseError as exc:
         context.log.exception("sqlite read failed for %s: %s", label, exc)
         raise Failure(
             description=f"snapshot read failed for {label}: {exc}",
@@ -335,7 +339,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
         with closing(sqlite3.connect(str(snapshot_path))) as conn:
             controls_count = conn.execute("SELECT COUNT(*) FROM controls").fetchone()[0]
             aggregates_count = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
-    except sqlite3.OperationalError as exc:
+    except sqlite3.DatabaseError as exc:
         context.log.exception("sqlite read failed for testing snapshot: %s", exc)
         raise Failure(
             description=f"snapshot read failed for testing API validation: {exc}",
