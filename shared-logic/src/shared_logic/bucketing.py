@@ -1,4 +1,10 @@
-"""Time-of-week bucket mapping and interval splitting for five clocks."""
+"""Time-of-week bucket mapping and interval splitting for five clocks.
+
+The ingest layer records the same event stream against multiple notions of
+time: UTC, local civil time, mean solar time, apparent solar time, and unequal
+hours. This module owns the conversions from timestamps or intervals into the
+shared weekly 5-minute bucket space used by aggregate blobs.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,8 @@
-"""SQLite storage access for controls and aggregates."""
+"""SQLite storage access for controls and aggregates.
+
+This module owns schema creation, compatibility migrations, and the small set
+of read/write operations used by the ingest layer.
+"""
 
 from __future__ import annotations
 
@@ -39,7 +43,11 @@ SCHEMA_STATEMENTS = (
 
 
 def open_db(db_path: str | Path) -> sqlite3.Connection:
-    """Open SQLite connection with required pragmatic settings."""
+    """Open a SQLite connection with the service's required pragmas.
+
+    The project prefers WAL mode and a busy timeout because both Flask servers
+    and tests may open multiple short-lived connections to the same database.
+    """
     path = str(db_path)
     # Keep connections permissive for service/test usage across framework internals.
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
@@ -50,7 +58,7 @@ def open_db(db_path: str | Path) -> sqlite3.Connection:
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Create required tables when missing."""
+    """Create required tables when missing and run lightweight migrations."""
     for statement in SCHEMA_STATEMENTS:
         stmt = statement.strip()
         if not stmt:
@@ -60,7 +68,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
-    """Ensure aggregates.control_id foreign key exists for legacy databases."""
+    """Ensure ``aggregates.control_id`` foreign key exists for legacy databases.
+
+    Older databases may have an ``aggregates`` table without the foreign key.
+    The migration rebuilds the table in-place and drops orphaned aggregate rows
+    that could not satisfy the newer constraint.
+    """
     try:
         conn.execute("BEGIN IMMEDIATE")
         table_exists = conn.execute(
@@ -109,7 +122,7 @@ def _migrate_aggregates_foreign_key(conn: sqlite3.Connection) -> None:
 
 
 def upsert_control(conn: sqlite3.Connection, control: Control) -> None:
-    """Insert or update control metadata by control_id."""
+    """Insert or update control metadata keyed by ``control_id``."""
     labels: str | None = None
     if control.state_labels is not None:
         labels = json.dumps(control.state_labels)
@@ -155,7 +168,11 @@ def _expected_blob_length(num_states: int) -> int:
 
 
 def update_aggregate(conn: sqlite3.Connection, key: AggregateKey, num_states: int, update_fn: Callable[[Blob], None]) -> None:
-    """Read-modify-write aggregate row under BEGIN IMMEDIATE."""
+    """Read-modify-write one aggregate row under ``BEGIN IMMEDIATE``.
+
+    Callers provide a blob mutation callback so storage can centralize the
+    transaction and upsert behavior while ingest owns the counter math.
+    """
     conn.execute("BEGIN IMMEDIATE")
     committed = False
     try:

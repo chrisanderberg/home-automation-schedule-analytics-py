@@ -1,4 +1,9 @@
-"""Dataclass contracts shared across services."""
+"""Dataclass contracts shared across services.
+
+The project keeps its storage and ingest logic in a shared package. These
+dataclasses provide the narrow value-object layer that both Flask and Dagster
+code depend on.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +24,7 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Config:
-    """Runtime clock configuration."""
+    """Runtime clock configuration used by multi-clock bucketing."""
 
     time_zone: str
     latitude: float
@@ -35,7 +40,7 @@ class Config:
 
 @dataclass(frozen=True)
 class Control:
-    """Control metadata for validation and blob sizing."""
+    """Control metadata for validation, storage, and blob sizing."""
 
     control_id: str
     control_type: str
@@ -52,7 +57,7 @@ class Control:
 
 @dataclass(frozen=True)
 class AggregateKey:
-    """Primary key for aggregate rows."""
+    """Primary key for one aggregate row in SQLite."""
 
     control_id: str
     model_id: str
@@ -61,7 +66,7 @@ class AggregateKey:
 
 @dataclass(frozen=True)
 class HoldingInput:
-    """One holding interval request payload."""
+    """One holding interval request payload after API validation."""
 
     control_id: str
     model_id: str
@@ -79,7 +84,7 @@ class HoldingInput:
 
 @dataclass(frozen=True)
 class TransitionInput:
-    """One transition request payload."""
+    """One transition request payload after API validation."""
 
     control_id: str
     model_id: str
@@ -97,7 +102,7 @@ class TransitionInput:
 
 @dataclass(frozen=True)
 class BucketSpan:
-    """Elapsed milliseconds attributed to one week bucket."""
+    """Elapsed milliseconds attributed to one weekly bucket."""
 
     bucket: int
     millis: int
@@ -112,7 +117,11 @@ class BucketSpan:
 
 @dataclass(frozen=True)
 class QuarterSpan:
-    """Interval span contained in one UTC calendar quarter."""
+    """Interval span contained in one UTC calendar quarter.
+
+    Aggregate blobs are quarter-scoped, so ingest splits longer ranges into
+    these spans before touching storage.
+    """
 
     quarter_index: int
     start_ms: int

@@ -1,4 +1,8 @@
-"""Snapshot export utilities shared by API and reporting flow."""
+"""Snapshot export utilities shared by API and reporting flow.
+
+Snapshot files are SQLite backups of live databases. The helpers here keep the
+export logic consistent between the Flask API and Dagster validation jobs.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ _SIDECAR_EXTS = ("-wal", "-shm", "-journal")
 
 
 def export_snapshot(conn: sqlite3.Connection) -> Path:
-    """Write timestamped production snapshot under data/snapshots."""
+    """Write a timestamped production snapshot under ``data/snapshots``."""
     root = snapshot_root()
     ts = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S-%f")
     out = root / f"snapshot-{ts}.sqlite"
@@ -23,7 +27,7 @@ def export_snapshot(conn: sqlite3.Connection) -> Path:
 
 
 def export_snapshot_for_test(conn: sqlite3.Connection, test_name: str, snapshot_name: str) -> Path:
-    """Write deterministic test snapshot path for validation flows."""
+    """Write a deterministic test snapshot path for validation flows."""
     safe_test_name = _validate_name_component(test_name, "test_name")
     safe_snapshot_name = _validate_name_component(snapshot_name, "snapshot_name")
     root = test_snapshot_root()
@@ -62,7 +66,8 @@ def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
     success = False
 
     try:
-        # Use SQLite backup API for consistent local snapshots.
+        # The backup API gives a transactionally consistent copy without asking
+        # callers to stop writes to the source database first.
         with closing(sqlite3.connect(str(temp_path), isolation_level=None)) as dst:
             conn.backup(dst)
         _cleanup_sidecars(temp_path)
@@ -100,10 +105,9 @@ def _validate_name_component(value: str, label: str) -> str:
 
 
 def reset_test_db_files(db_path: Path) -> None:
-    """Remove test DB, SQLite sidecar files, and any related directories.
+    """Remove a test DB plus SQLite sidecar files left by prior runs.
 
-    Deletes the given db_path and its sidecar variants (-wal, -shm, -journal).
-    Files are unlinked; directories are removed recursively (shutil.rmtree).
+    The reset endpoint uses this to make repeated test flows deterministic.
     """
     for candidate in (db_path, *(db_path.with_name(db_path.name + ext) for ext in _SIDECAR_EXTS)):
         if candidate.exists():

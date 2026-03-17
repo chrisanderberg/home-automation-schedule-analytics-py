@@ -17,5 +17,5 @@ __all__ = ["RepositoryRootNotFound", "ensure_repo_src_paths", "find_repo_root"]
 
 
 def ensure_repo_src_paths() -> None:
-    """Add local src roots to sys.path for direct execution."""
+    """Add local src roots to ``sys.path`` for direct service execution."""
     ensure_repo_src_paths_for_service("reporting", Path(__file__).resolve().parent)

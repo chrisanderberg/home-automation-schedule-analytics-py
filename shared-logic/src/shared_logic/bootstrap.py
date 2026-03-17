@@ -1,4 +1,9 @@
-"""Runtime bootstrap helpers shared by service entrypoints."""
+"""Runtime bootstrap helpers shared by service entrypoints.
+
+These functions exist so the services can run directly from a checked-out repo
+without requiring an editable install first. They intentionally centralize the
+``sys.path`` manipulation in one place.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +22,9 @@ def find_repo_root(start: Path) -> Path:
     """Walk upward from a path to locate the repository root.
 
     If start is a file, it is normalized to its parent directory before walking.
-    The path is resolved (start.resolve()) before walking upward. Callers may
-    safely pass Path(__file__); the function handles file inputs and returns
-    a resolved directory Path representing the repository root.
+    The path is resolved before walking upward. Callers may safely pass
+    ``Path(__file__)``; the function handles file inputs and returns the
+    repository root directory.
     """
     start = start.resolve()
     if start.is_file():
@@ -37,7 +42,8 @@ def ensure_repo_src_paths_for_service(service_name: str, here: Path) -> None:
     Path(__file__).parent). find_repo_root also accepts file paths and
     normalizes them to their parent before walking upward.
 
-    Service src has higher import precedence than shared-logic.
+    Service src has higher import precedence than shared-logic so service-local
+    modules resolve first when names overlap.
     """
     repo_root = find_repo_root(here)
     candidates = [

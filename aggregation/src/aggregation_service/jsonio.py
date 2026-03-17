@@ -1,4 +1,8 @@
-"""Strict JSON helpers for Flask handlers."""
+"""Strict JSON helpers for Flask handlers.
+
+The API intentionally rejects unknown keys so request contracts stay explicit
+and backwards-incompatible payload changes fail loudly.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,11 @@ class BadRequestError(ValueError):
 
 
 def decode_strict_json(request: Request, required: Iterable[str], optional: Iterable[str] = ()) -> dict[str, Any]:
-    """Decode JSON object and reject unknown or missing fields."""
+    """Decode a JSON object and reject unknown or missing fields.
+
+    This keeps the Flask boundary narrow: handlers receive a dictionary whose
+    shape is already checked against the endpoint contract.
+    """
     if not request.is_json:
         raise BadRequestError("Content-Type must be application/json")
     try:

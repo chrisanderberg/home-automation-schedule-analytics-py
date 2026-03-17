@@ -48,6 +48,21 @@ class QuarterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             split_interval_by_quarter_utc(1710046800000, 1710043200000)
 
+    def test_quarter_index_exact_boundary_start_of_quarter(self):
+        self.assertEqual(quarter_index_utc(1711929600000), 217)  # 2024-04-01T00:00:00Z
+
+    def test_split_interval_exactly_ends_on_quarter_boundary(self):
+        spans = split_interval_by_quarter_utc(1711926000000, 1711929600000)
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].quarter_index, 216)
+        self.assertEqual(spans[0].end_ms, 1711929600000)
+
+    def test_split_interval_exactly_starts_on_quarter_boundary(self):
+        spans = split_interval_by_quarter_utc(1711929600000, 1711933200000)
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].quarter_index, 217)
+        self.assertEqual(spans[0].start_ms, 1711929600000)
+
 
 if __name__ == "__main__":
     unittest.main()

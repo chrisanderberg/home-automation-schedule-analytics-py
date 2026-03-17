@@ -1,4 +1,9 @@
-"""Dagster assets and sensors for snapshot validation and reporting."""
+"""Dagster assets and sensors for snapshot validation and reporting.
+
+The reporting package does two things: summarize the latest snapshot files and
+exercise the testing API end-to-end so Dagster can validate that the API and
+snapshot export path still work together.
+"""
 
 import json
 import os
@@ -31,7 +36,7 @@ _repository_root_fn = _snapshot_root_fn = _test_snapshot_root_fn = None
 
 
 def _ensure_bootstrap() -> None:
-    """Run bootstrap once when paths are first needed."""
+    """Run bootstrap once when shared path helpers are first needed."""
     global _repository_root_fn, _snapshot_root_fn, _test_snapshot_root_fn
     if _paths_initialized_event.is_set():
         return
@@ -154,12 +159,20 @@ def _post_json(url: str, payload: dict) -> tuple[int, dict]:
                 parsed_any = decode_json_body(body, decode_error_as_error_payload=False)
             except ValueError:
                 parsed_any = {}
-            parsed = parsed_any if isinstance(parsed_any, dict) else {"error": f"unexpected payload type: {type(parsed_any).__name__}"}
+            parsed = (
+                parsed_any
+                if isinstance(parsed_any, dict)
+                else {"error": f"unexpected payload type: {type(parsed_any).__name__}"}
+            )
             return resp.status, parsed
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8") if exc.fp is not None else ""
         parsed_any = decode_json_body(body, decode_error_as_error_payload=True)
-        parsed = parsed_any if isinstance(parsed_any, dict) else {"error": f"unexpected payload type: {type(parsed_any).__name__}"}
+        parsed = (
+            parsed_any
+            if isinstance(parsed_any, dict)
+            else {"error": f"unexpected payload type: {type(parsed_any).__name__}"}
+        )
         return exc.code, parsed
 
 
@@ -265,6 +278,8 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
     snapshot_name = _testing_flow_snapshot_name()
 
     try:
+        # This sequence intentionally mirrors a minimal client flow so the asset
+        # validates API writes, snapshot export, and snapshot readability together.
         status, payload = _post_json(f"{base_url}/v1/reset", {"testName": test_name})
         _require_status(status, 200, "reset", payload)
 
@@ -328,6 +343,8 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
     if snapshot_path_raw is not None:
         root = _test_snapshot_root_fn().resolve()
         candidate = (root / Path(snapshot_path_raw)).resolve()
+        # Treat returned paths as root-relative to prevent the API response from
+        # pointing Dagster at files outside the managed snapshot directory.
         if not candidate.is_relative_to(root):
             raise Failure(
                 description=f"snapshot path escapes test snapshot root: {snapshot_path_raw}",
@@ -379,7 +396,7 @@ def testing_api_snapshot_validation(context: AssetExecutionContext) -> Materiali
 
 @sensor(job_name="snapshot_job")
 def snapshot_sensor(context: SensorEvaluationContext):
-    """Trigger snapshot job when a newer production snapshot appears.
+    """Trigger the snapshot job when a newer production snapshot appears.
 
     Args:
         context: Dagster sensor evaluation context and cursor holder.

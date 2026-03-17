@@ -1,4 +1,9 @@
-"""Flask application factories for main and testing APIs."""
+"""Flask application factories for main and testing APIs.
+
+The main API writes to the production database. The testing API mirrors the
+same contract but routes requests into isolated per-test databases so automation
+flows and integration tests can exercise end-to-end behavior safely.
+"""
 
 from __future__ import annotations
 
@@ -201,7 +206,11 @@ def _open_main_db():
 
 
 def _open_test_db_locked(test_name: str):
-    """Open and initialize a per-test database while holding the per-test lock."""
+    """Open and initialize a per-test database while holding the per-test lock.
+
+    Schema creation only happens once per logical test DB, but the existence
+    check also handles cases where files were deleted after the process started.
+    """
     db_path = _test_db_path(test_name)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with _initialized_test_dbs_lock:
@@ -232,7 +241,7 @@ def _test_db_path(test_name: str) -> Path:
 
 
 def _with_test_db(test_name: str, fn: Callable[[Any], _T]) -> _T:
-    """Open/close a test DB connection around one operation."""
+    """Open and close a test DB connection around one operation."""
     with _test_db_init_lock(test_name):
         conn, _ = _open_test_db_locked(test_name)
         try:
@@ -249,7 +258,11 @@ def _handle_request(
     bad_request_error: str | None = "invalid json",
     internal_error: str = "internal server error",
 ) -> Any:
-    """Execute one request handler with consistent error mapping."""
+    """Execute one request handler with consistent error mapping.
+
+    This keeps endpoint bodies focused on request-specific logic instead of
+    repeating the same Flask-to-domain exception translation.
+    """
     try:
         return action()
     except BadRequestError as exc:
@@ -263,7 +276,7 @@ def _handle_request(
 
 
 def create_main_app(cfg: Config) -> Flask:
-    """Create main API application bound to production DB path."""
+    """Create the main API application bound to the production DB path."""
     app = Flask("aggregation-main")
     init_conn = _open_main_db()
     try:
@@ -407,7 +420,7 @@ def create_main_app(cfg: Config) -> Flask:
 
 
 def create_testing_app(cfg: Config) -> Flask:
-    """Create testing API application with isolated per-test DB paths."""
+    """Create the testing API application with isolated per-test DB paths."""
     app = Flask("aggregation-testing")
 
     @app.get("/v1/health")

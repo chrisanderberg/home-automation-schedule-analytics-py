@@ -1,4 +1,8 @@
-"""Path resolution utilities for runtime contracts."""
+"""Path resolution utilities for runtime contracts.
+
+All runtime file locations are derived from repository-relative roots so both
+services and tests agree on where to find databases and snapshots.
+"""
 
 import functools
 import os
@@ -24,7 +28,7 @@ def _find_repo_root_from(start: Path) -> Path | None:
 
 @functools.lru_cache(maxsize=1)
 def repository_root() -> Path:
-    """Locate repository root from this module path."""
+    """Locate the repository root from module path or current working directory."""
     for start in (Path(__file__).resolve(), Path.cwd().resolve()):
         found = _find_repo_root_from(start)
         if found is not None:
@@ -33,17 +37,17 @@ def repository_root() -> Path:
 
 
 def data_root() -> Path:
-    """Return production data root."""
+    """Return the production data directory."""
     return repository_root() / "data"
 
 
 def snapshot_root() -> Path:
-    """Return production snapshot root."""
+    """Return the production snapshot directory."""
     return data_root() / "snapshots"
 
 
 def test_data_root() -> Path:
-    """Return test data root using TEST_DATA_DIR override when set."""
+    """Return the testing data directory, honoring ``TEST_DATA_DIR`` override."""
     override = os.getenv("TEST_DATA_DIR", "").strip()
     if override:
         override_path = Path(override).resolve()
@@ -56,5 +60,5 @@ def test_data_root() -> Path:
 
 
 def test_snapshot_root() -> Path:
-    """Return testing snapshot root."""
+    """Return the testing snapshot directory."""
     return test_data_root() / "snapshots"
