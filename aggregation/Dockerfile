@@ -3,12 +3,12 @@ FROM python:3.11.14-slim
 WORKDIR /app
 
 COPY pyproject.toml /app/pyproject.toml
-# Rebuild this image on a regular CI schedule to pick up upstream security patches.
-RUN pip install --no-cache-dir ".[aggregation]"
-
 COPY shared-logic /app/shared-logic
 COPY aggregation /app/aggregation
 COPY data /app/data
+
+# Rebuild this image on a regular CI schedule to pick up upstream security patches.
+RUN pip install --no-cache-dir ".[aggregation]"
 
 RUN groupadd --system app && \
     useradd --system --create-home --gid app app && \
@@ -17,6 +17,9 @@ RUN groupadd --system app && \
 ENV PYTHONPATH=/app/shared-logic/src:/app/aggregation/src
 ENV HAA_MAIN_PORT=8080
 ENV HAA_TESTING_PORT=8081
+# Required at runtime; startup fails fast if either is missing.
+# ENV HAA_LATITUDE=...
+# ENV HAA_LONGITUDE=...
 ENV HOME=/home/app
 
 EXPOSE 8080

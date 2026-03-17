@@ -96,6 +96,10 @@ class TransitionInput:
         """Validate transition input invariants."""
         if self.timestamp_ms < 0:
             raise ValueError("timestamp_ms must be non-negative")
+        if self.from_state < 0:
+            raise ValueError("from_state must be non-negative")
+        if self.to_state < 0:
+            raise ValueError("to_state must be non-negative")
         if self.from_state == self.to_state:
             raise ValueError("from_state must not equal to_state")
 

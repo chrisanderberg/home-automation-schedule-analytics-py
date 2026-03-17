@@ -262,6 +262,24 @@ class IngestTests(unittest.TestCase):
                 timestamp_ms=1704067500000,
             )
 
+    def test_ingest_transition_rejects_negative_state_indices(self):
+        with self.assertRaisesRegex(ValueError, "from_state must be non-negative"):
+            TransitionInput(
+                control_id="mode",
+                model_id="m1",
+                from_state=-1,
+                to_state=1,
+                timestamp_ms=1704067500000,
+            )
+        with self.assertRaisesRegex(ValueError, "to_state must be non-negative"):
+            TransitionInput(
+                control_id="mode",
+                model_id="m1",
+                from_state=1,
+                to_state=-1,
+                timestamp_ms=1704067500000,
+            )
+
     def test_ingest_skips_undefined_clock_calculations_without_failing(self):
         """One undefined clock should not block ingest for the other clock families."""
         conn = self._make_conn_and_control()

@@ -147,25 +147,22 @@ class ReportingDagsterTests(unittest.TestCase):
 
     def test_testing_api_flow_fails_on_bad_snapshot_export_status(self):
         """A bad export status should preserve the failing step in the Dagster error path."""
-        with self._quiet_asset_context() as context:
-        # Sequence maps to testing_api_snapshot_validation calls via reporting_service.assets._post_json:
-        # reset -> create c1 -> create c2 -> holding c1 -> holding c2 -> snapshot export.
-            with patch.object(context.log, "exception") as mock_exception:
-                post_results = [
-                    (200, {"status": "ok"}),
-                    (202, {"status": "accepted"}),
-                    (202, {"status": "accepted"}),
-                    (202, {"status": "accepted"}),
-                    (202, {"status": "accepted"}),
-                    (500, {"error": "snapshot export failed"}),
-                ]
-                expected_post_calls = 6
-                with patch("reporting_service.assets._post_json", side_effect=post_results) as mock_post:
-                    with self.assertRaisesRegex(Failure, "snapshot export failed") as cm:
-                        assets.testing_api_snapshot_validation(context)
-        self.assertEqual(mock_post.call_count, expected_post_calls)
-        mock_exception.assert_called_once()
-        self.assertEqual(cm.exception.metadata["snapshot_missing"].value, True)
+        with self._quiet_asset_context() as context, patch.object(context.log, "exception") as mock_exception:
+            post_results = [
+                (200, {"status": "ok"}),
+                (202, {"status": "accepted"}),
+                (202, {"status": "accepted"}),
+                (202, {"status": "accepted"}),
+                (202, {"status": "accepted"}),
+                (500, {"error": "snapshot export failed"}),
+            ]
+            expected_post_calls = 6
+            with patch("reporting_service.assets._post_json", side_effect=post_results) as mock_post:
+                with self.assertRaisesRegex(Failure, "snapshot export failed") as cm:
+                    assets.testing_api_snapshot_validation(context)
+                self.assertEqual(mock_post.call_count, expected_post_calls)
+                mock_exception.assert_called_once()
+                self.assertEqual(cm.exception.metadata["snapshot_missing"].value, True)
 
     def test_testing_api_flow_fails_on_escaped_snapshot_path(self):
         """Regression: a 200 response must still reject paths outside the allowed root."""
@@ -358,8 +355,19 @@ class ReportingDagsterTests(unittest.TestCase):
     def test_post_json_handles_non_dict_success_payload(self):
         response = io.BytesIO(b"[1,2,3]")
         response.status = 200
-        response.__enter__ = lambda self=response: self
-        response.__exit__ = lambda exc_type, exc, tb: False
+
+        def _enter(self):
+            return self
+
+        def _read(self):
+            return b"[1,2,3]"
+
+        def _exit(self, exc_type, exc_val, exc_tb):
+            return False
+
+        response.__enter__ = _enter.__get__(response, type(response))
+        response.read = _read.__get__(response, type(response))
+        response.__exit__ = _exit.__get__(response, type(response))
         with patch("urllib.request.urlopen", return_value=response):
             status, payload = assets._post_json("http://127.0.0.1:8081/v1/snapshots", {"a": 1})
         self.assertEqual(status, 200)
