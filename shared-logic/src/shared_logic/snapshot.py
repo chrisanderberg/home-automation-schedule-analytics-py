@@ -10,10 +10,11 @@ import shutil
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
+import os
 from pathlib import Path
 from uuid import uuid4
 
-from .paths import snapshot_root, test_snapshot_root
+from .paths import repository_root, snapshot_root, test_snapshot_root
 
 _SIDECAR_EXTS = ("-wal", "-shm", "-journal")
 
@@ -109,7 +110,15 @@ def reset_test_db_files(db_path: Path) -> None:
 
     The reset endpoint uses this to make repeated test flows deterministic.
     """
-    for candidate in (db_path, *(db_path.with_name(db_path.name + ext) for ext in _SIDECAR_EXTS)):
+    override = os.environ.get("TEST_DATA_DIR", "").strip()
+    test_root = Path(override).resolve() if override else (repository_root() / "test-data").resolve()
+    resolved_db_path = db_path.resolve()
+    try:
+        resolved_db_path.relative_to(test_root)
+    except ValueError as exc:
+        raise ValueError(f"refusing to reset path outside test data root: {resolved_db_path}") from exc
+
+    for candidate in (resolved_db_path, *(resolved_db_path.with_name(resolved_db_path.name + ext) for ext in _SIDECAR_EXTS)):
         if candidate.exists():
             if candidate.is_file():
                 candidate.unlink(missing_ok=True)

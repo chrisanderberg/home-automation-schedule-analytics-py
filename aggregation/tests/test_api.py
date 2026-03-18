@@ -115,10 +115,12 @@ class ApiTests(unittest.TestCase):
     def test_testing_reset_endpoint_removes_test_database(self):
         """Reset must be destructive so repeated validation runs start from a clean slate."""
         client, test_root = self._testing_client()
-        client.post(
+        create_response = client.post(
             "/v1/controls",
             json={"testName": "case-a", "controlId": "mode", "controlType": "discrete", "numStates": 2},
         )
+        self.assertEqual(create_response.status_code, 202)
+        self.assertTrue((test_root / "case-a-test-data.sqlite").exists())
 
         response = client.post("/v1/reset", json={"testName": "case-a"})
 

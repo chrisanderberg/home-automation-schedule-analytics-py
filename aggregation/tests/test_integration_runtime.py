@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 from urllib.error import URLError
 
-from aggregation_service.main import ServerController
+from aggregation_service.main import PortBindError, ServerController
 from shared_logic.contracts import Config
 
 
@@ -39,7 +39,7 @@ class RuntimeIntegrationTests(unittest.TestCase):
         """Skip cleanly when the environment blocks local socket binds."""
         try:
             controller = ServerController(self.cfg, main_port=0, testing_port=0)
-        except SystemExit as exc:
+        except (OSError, PortBindError, SystemExit) as exc:
             raise unittest.SkipTest(f"socket bind not permitted in this environment: {exc}") from exc
         self.addCleanup(controller.stop)
         controller.start()
@@ -54,7 +54,7 @@ class RuntimeIntegrationTests(unittest.TestCase):
                 status, _payload = self._fetch_json(url)
                 if status == 200:
                     return
-            except Exception as exc:  # pragma: no cover - only exercised on slow startup
+            except URLError as exc:  # pragma: no cover - only exercised on slow startup
                 last_error = exc
                 time.sleep(0.05)
         raise AssertionError(f"server did not become ready: {url} last_error={last_error!r}")

@@ -295,9 +295,10 @@ class IngestTests(unittest.TestCase):
                     start_time_ms=1704067200000,
                     end_time_ms=1704067500000,
                 ),
-            )
+        )
         blob = self._load_blob(conn, model_id="m1", quarter_index=quarter_index_utc(1704067200000), num_states=3)
         self.assertEqual(blob.get_u64(hold_index(1, CLOCK_UNEQUAL_HOURS, 0, 3)), 0)
+        self.assertGreater(blob.get_u64(hold_index(1, CLOCK_LOCAL, 0, 3)), 0)
 
     def test_connection_can_be_used_from_server_thread(self):
         # Verifies open_db disables sqlite thread affinity checks for server-thread request handling.

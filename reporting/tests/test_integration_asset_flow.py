@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import os
 import tempfile
 import time
@@ -63,11 +64,14 @@ class ReportingAssetIntegrationTests(unittest.TestCase):
                 testing_url = f"http://127.0.0.1:{controller.testing_server.server_port}"
                 self._wait_until_ready(f"{testing_url}/v1/health")
 
-                with mock.patch.dict(os.environ, {"HAA_TESTING_API_URL": testing_url}, clear=False):
-                    with mock.patch("reporting_service.assets._ensure_bootstrap"):
-                        with mock.patch("reporting_service.assets._test_snapshot_root_fn", return_value=test_root / "snapshots"):
-                            with mock.patch("reporting_service.assets._repository_root_fn", return_value=root):
-                                result = assets.testing_api_snapshot_validation(build_asset_context())
+                with ExitStack() as stack:
+                    stack.enter_context(mock.patch.dict(os.environ, {"HAA_TESTING_API_URL": testing_url}, clear=False))
+                    stack.enter_context(mock.patch("reporting_service.assets._ensure_bootstrap"))
+                    stack.enter_context(
+                        mock.patch("reporting_service.assets._test_snapshot_root_fn", return_value=test_root / "snapshots")
+                    )
+                    stack.enter_context(mock.patch("reporting_service.assets._repository_root_fn", return_value=root))
+                    result = assets.testing_api_snapshot_validation(build_asset_context())
                 self.assertEqual(result.metadata["controls_count"], 2)
                 self.assertEqual(result.metadata["aggregates_count"], 2)
                 self.assertEqual(result.metadata["test_name"], "live-flow")

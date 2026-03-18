@@ -135,7 +135,7 @@ Target file: `reporting/tests/test_definitions_and_assets.py`
 - [x] `test_snapshot_sensor_skips_when_cursor_is_current`
 - [x] `test_snapshot_sensor_skips_when_snapshot_removed`
 - [x] `test_snapshot_sensor_tolerates_invalid_cursor_value`
-- [x] Selected `Failure.metadata` assertions for key Dagster failure paths
+- [x] `Failure.metadata` assertions covered by `test_missing_snapshot_is_a_failure_not_a_success_materialization`, `test_testing_api_flow_raises_failure_when_api_times_out`, `test_testing_api_flow_fails_on_bad_snapshot_export_status`, `test_testing_api_flow_fails_on_escaped_snapshot_path`, `test_testing_api_flow_fails_when_snapshot_file_missing_after_export`, and `test_testing_api_flow_fails_when_snapshot_is_corrupt`
 
 Target file: `reporting/tests/test_http_json.py`
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -9,13 +10,19 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from shared_logic.contracts import Control
+from shared_logic.paths import repository_root
 from shared_logic.snapshot import _backup_to_path, export_snapshot, export_snapshot_for_test, reset_test_db_files
 from shared_logic.storage import init_schema, open_db, upsert_control
 
 
 class SnapshotTests(unittest.TestCase):
+    def _temp_test_root(self):
+        base_test_dir = Path(os.environ.get("TEST_DATA_DIR", repository_root() / "test-data")).resolve()
+        base_test_dir.mkdir(parents=True, exist_ok=True)
+        return tempfile.TemporaryDirectory(dir=str(base_test_dir))
+
     def test_export_snapshot_creates_readable_sqlite_copy(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with self._temp_test_root() as tmp:
             root = Path(tmp)
             conn = open_db(root / "source.sqlite")
             self.addCleanup(conn.close)
@@ -31,7 +38,7 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(count, 1)
 
     def test_export_snapshot_for_test_uses_deterministic_filename(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with self._temp_test_root() as tmp:
             root = Path(tmp)
             conn = open_db(root / "source.sqlite")
             self.addCleanup(conn.close)
@@ -42,7 +49,7 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(path.name, "case-a-baseline-snapshot.sqlite")
 
     def test_export_snapshot_for_test_rejects_path_separators(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with self._temp_test_root() as tmp:
             conn = open_db(Path(tmp) / "source.sqlite")
             self.addCleanup(conn.close)
             init_schema(conn)
@@ -50,7 +57,7 @@ class SnapshotTests(unittest.TestCase):
                 export_snapshot_for_test(conn, "case/a", "baseline")
 
     def test_export_snapshot_for_test_rejects_empty_name_components(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with self._temp_test_root() as tmp:
             conn = open_db(Path(tmp) / "source.sqlite")
             self.addCleanup(conn.close)
             init_schema(conn)
@@ -58,7 +65,7 @@ class SnapshotTests(unittest.TestCase):
                 export_snapshot_for_test(conn, "", "baseline")
 
     def test_reset_test_db_files_removes_db_and_sidecars(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with self._temp_test_root() as tmp:
             db_path = Path(tmp) / "case.sqlite"
             db_path.write_bytes(b"db")
             for suffix in ("-wal", "-shm", "-journal"):
@@ -70,8 +77,18 @@ class SnapshotTests(unittest.TestCase):
             for suffix in ("-wal", "-shm", "-journal"):
                 self.assertFalse(db_path.with_name(db_path.name + suffix).exists())
 
-    def test_backup_to_path_cleans_up_temp_file_when_replace_fails(self):
+    def test_reset_test_db_files_rejects_paths_outside_test_data_root(self):
         with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "case.sqlite"
+            db_path.write_bytes(b"db")
+
+            with self.assertRaisesRegex(ValueError, "outside test data root"):
+                reset_test_db_files(db_path)
+
+            self.assertTrue(db_path.exists())
+
+    def test_backup_to_path_cleans_up_temp_file_when_replace_fails(self):
+        with self._temp_test_root() as tmp:
             root = Path(tmp)
             conn = open_db(root / "source.sqlite")
             self.addCleanup(conn.close)
@@ -94,7 +111,7 @@ class SnapshotTests(unittest.TestCase):
             self.assertFalse(out_path.exists())
 
     def test_backup_to_path_cleans_up_temp_file_when_backup_fails(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with self._temp_test_root() as tmp:
             root = Path(tmp)
             out_path = root / "snapshots" / "snapshot.sqlite"
             conn = Mock()
