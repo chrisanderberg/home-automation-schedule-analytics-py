@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import os
+import socket
 import tempfile
 import time
 import unittest
 import unittest.mock as mock
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -29,7 +31,7 @@ class ReportingAssetIntegrationTests(unittest.TestCase):
                 with urllib.request.urlopen(url, timeout=5) as resp:
                     if resp.status == 200:
                         return
-            except Exception:  # pragma: no cover - only exercised on slow startup
+            except (urllib.error.URLError, socket.timeout):  # pragma: no cover - only exercised on slow startup
                 time.sleep(0.05)
         raise AssertionError(f"server did not become ready: {url}")
 
