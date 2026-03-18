@@ -19,7 +19,7 @@ class PathsTests(unittest.TestCase):
 
     def test_test_data_root_defaults_to_repo_test_data_directory(self):
         repo_root = Path("/tmp/repo-root")
-        with patch.dict(os.environ, {}, clear=False):
+        with patch.dict(os.environ, {}, clear=True):
             with patch("shared_logic.paths.repository_root", return_value=repo_root):
                 self.assertEqual(paths.test_data_root(), repo_root / "test-data")
 

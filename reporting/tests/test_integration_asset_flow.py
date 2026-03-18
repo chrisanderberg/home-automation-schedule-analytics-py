@@ -13,7 +13,7 @@ from pathlib import Path
 
 from dagster import build_asset_context
 
-from aggregation_service.main import ServerController
+from aggregation_service.main import PortBindError, ServerController
 from reporting_service import assets
 from shared_logic.contracts import Config
 
@@ -37,7 +37,7 @@ class ReportingAssetIntegrationTests(unittest.TestCase):
         """Skip cleanly when the environment blocks local port binding."""
         try:
             controller = ServerController(cfg, main_port=0, testing_port=0)
-        except (OSError, SystemExit) as exc:
+        except (OSError, PortBindError, SystemExit) as exc:
             raise unittest.SkipTest(f"socket bind not permitted in this environment: {exc}") from exc
         self.addCleanup(controller.stop)
         controller.start()

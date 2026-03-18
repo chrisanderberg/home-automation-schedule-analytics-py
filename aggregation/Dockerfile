@@ -3,12 +3,15 @@ FROM python:3.11.14-slim
 WORKDIR /app
 
 COPY pyproject.toml /app/pyproject.toml
+COPY uv.lock /app/uv.lock
 COPY shared-logic /app/shared-logic
 COPY aggregation /app/aggregation
 COPY data /app/data
 
 # Rebuild this image on a regular CI schedule to pick up upstream security patches.
-RUN pip install --no-cache-dir ".[aggregation]"
+RUN pip install --no-cache-dir uv && \
+    uv export --frozen --no-dev --extra aggregation --format requirements-txt -o /tmp/requirements.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN groupadd --system app && \
     useradd --system --create-home --gid app app && \
