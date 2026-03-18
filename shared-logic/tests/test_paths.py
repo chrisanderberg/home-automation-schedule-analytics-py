@@ -58,20 +58,21 @@ class PathsTests(unittest.TestCase):
 
     def test_repository_root_finds_repo_from_current_working_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp)
-            (repo_root / "aggregation").mkdir()
-            (repo_root / "shared-logic").mkdir()
-            (repo_root / "pyproject.toml").write_text("[project]\nname='x'\n")
-            cwd_child = repo_root / "some" / "nested" / "cwd"
-            cwd_child.mkdir(parents=True, exist_ok=True)
-            outside_root = repo_root.parent / "outside-repo" / "paths.py"
-            outside_root.parent.mkdir(parents=True, exist_ok=True)
-            outside_root.touch()
+            with tempfile.TemporaryDirectory() as outside_tmp:
+                repo_root = Path(tmp)
+                (repo_root / "aggregation").mkdir()
+                (repo_root / "shared-logic").mkdir()
+                (repo_root / "pyproject.toml").write_text("[project]\nname='x'\n")
+                cwd_child = repo_root / "some" / "nested" / "cwd"
+                cwd_child.mkdir(parents=True, exist_ok=True)
+                outside_root = Path(outside_tmp) / "outside-repo" / "paths.py"
+                outside_root.parent.mkdir(parents=True, exist_ok=True)
+                outside_root.touch()
 
-            paths.repository_root.cache_clear()
-            with patch("shared_logic.paths.Path.cwd", return_value=cwd_child):
-                with patch("shared_logic.paths.__file__", str(outside_root)):
-                    self.assertEqual(paths.repository_root(), repo_root.resolve())
+                paths.repository_root.cache_clear()
+                with patch("shared_logic.paths.Path.cwd", return_value=cwd_child):
+                    with patch("shared_logic.paths.__file__", str(outside_root)):
+                        self.assertEqual(paths.repository_root(), repo_root.resolve())
 
     def test_find_repo_root_from_real_tree_returns_none_when_sentinel_missing(self):
         """Matching directories alone are not enough; a project sentinel must also be present."""

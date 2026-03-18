@@ -12,7 +12,7 @@ COPY data /app/data
 
 # Rebuild this image on a regular CI schedule to pick up upstream security patches.
 RUN pip install --no-cache-dir "uv==${UV_VERSION}" && \
-    uv export --frozen --no-dev --extra aggregation --format requirements-txt -o /tmp/requirements.txt && \
+    uv export --frozen --no-dev --extra aggregation --format requirements.txt --output-file /tmp/requirements.txt && \
     pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN groupadd --system app && \

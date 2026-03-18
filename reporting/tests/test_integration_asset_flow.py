@@ -28,7 +28,7 @@ class ReportingAssetIntegrationTests(unittest.TestCase):
         deadline = time.time() + 5
         while time.time() < deadline:
             try:
-                with urllib.request.urlopen(url, timeout=5) as resp:
+                with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: S310 - local test URL, safe to use
                     if resp.status == 200:
                         return
             except (urllib.error.URLError, socket.timeout):  # pragma: no cover - only exercised on slow startup
