@@ -86,6 +86,24 @@ class PathsTests(unittest.TestCase):
 
             self.assertIsNone(paths._find_repo_root_from(nested))
 
+    def test_repository_root_raises_when_no_project_sentinel_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with tempfile.TemporaryDirectory() as outside_tmp:
+                repo_root = Path(tmp)
+                (repo_root / "aggregation").mkdir()
+                (repo_root / "shared-logic").mkdir()
+                cwd_child = repo_root / "some" / "nested" / "cwd"
+                cwd_child.mkdir(parents=True, exist_ok=True)
+                outside_root = Path(outside_tmp) / "outside-repo" / "paths.py"
+                outside_root.parent.mkdir(parents=True, exist_ok=True)
+                outside_root.touch()
+
+                paths.repository_root.cache_clear()
+                with patch("shared_logic.paths.Path.cwd", return_value=cwd_child):
+                    with patch("shared_logic.paths.__file__", str(outside_root)):
+                        with self.assertRaisesRegex(RuntimeError, "repository root not found"):
+                            paths.repository_root()
+
 
 if __name__ == "__main__":
     unittest.main()
