@@ -1,4 +1,9 @@
-"""Dual-port Flask service entrypoint."""
+"""Dual-port Flask service entrypoint.
+
+The local runtime hosts two Werkzeug servers in one process: the production-like
+API on port 8080 and an isolated testing API on port 8081. This module owns the
+shared lifecycle, configuration loading, and coordinated shutdown behavior.
+"""
 
 from __future__ import annotations
 
@@ -42,14 +47,18 @@ class PortBindError(OSError):
 
 @dataclass
 class ServerThread:
-    """Thread wrapper around a werkzeug WSGI server."""
+    """Thread wrapper around a Werkzeug WSGI server."""
 
     server: Any
     thread: threading.Thread
 
 
 class ServerController:
-    """Start and stop both API servers together."""
+    """Start and stop both API servers together.
+
+    Keeping both servers behind one controller makes signal handling and bind
+    failure cleanup predictable during local development and tests.
+    """
 
     def __init__(
         self,
@@ -343,6 +352,8 @@ def run() -> int:
     logger.info("testing API listening on %s:%s", testing_host, testing_port)
 
     try:
+        # Polling keeps the main thread responsive to signal handlers while the
+        # actual request serving happens on background threads.
         while controller.should_run():
             time.sleep(0.2)
     finally:

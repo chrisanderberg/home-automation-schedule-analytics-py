@@ -1,4 +1,9 @@
-"""UTC quarter index and interval splitting."""
+"""UTC quarter index and interval splitting.
+
+Aggregate rows are stored per UTC calendar quarter. This module provides the
+quarter key derivation and the interval splitting needed to keep writes aligned
+to that storage boundary.
+"""
 
 from __future__ import annotations
 
@@ -23,13 +28,13 @@ def _quarter_index_from_dt(dt: datetime) -> int:
 
 
 def quarter_index_utc(timestamp_ms: int) -> int:
-    """Return quarter index: (year - 1970) * 4 + (quarter - 1)."""
+    """Return the compact UTC quarter index used in aggregate primary keys."""
     dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
     return _quarter_index_from_dt(dt)
 
 
 def split_interval_by_quarter_utc(start_ms: int, end_ms: int) -> list[QuarterSpan]:
-    """Split [start_ms, end_ms) at UTC quarter boundaries."""
+    """Split ``[start_ms, end_ms)`` at UTC quarter boundaries."""
     if end_ms <= start_ms:
         raise ValueError("invalid interval")
 

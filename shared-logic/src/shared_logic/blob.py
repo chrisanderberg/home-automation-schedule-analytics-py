@@ -1,4 +1,10 @@
-"""Dense blob constants, index math, and value accessors."""
+"""Dense aggregate blob primitives.
+
+The storage layer persists one binary blob per
+``(control_id, model_id, quarter_index)``. This module defines the canonical
+layout for that blob so ingest code, storage code, and tests all speak the same
+indexing scheme.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +24,12 @@ MAX_STATES = 10
 
 
 class Blob:
-    """Mutable dense u64 blob with canonical N^2 * GROUP_SIZE layout."""
+    """Mutable dense ``u64`` blob with canonical ``N^2 * GROUP_SIZE`` layout.
+
+    The first ``num_states`` groups store holding durations per state. The
+    remaining ``num_states * (num_states - 1)`` groups store transition counts
+    for every directed edge between different states.
+    """
 
     def __init__(self, num_states: int, data: bytes | bytearray | None = None) -> None:
         """Create a dense mutable blob for aggregate counters.
@@ -66,7 +77,11 @@ class Blob:
 
 
 def hold_index(state: int, clock: int, bucket: int, num_states: int) -> int:
-    """Return holding index for (state, clock, bucket)."""
+    """Return the flat blob index for one holding bucket.
+
+    Holding values occupy the first contiguous region of the blob, grouped by
+    state and then by clock.
+    """
     if num_states < MIN_STATES or num_states > MAX_STATES:
         raise ValueError("invalid num_states")
     if state < 0 or state >= num_states:
@@ -79,7 +94,11 @@ def hold_index(state: int, clock: int, bucket: int, num_states: int) -> int:
 
 
 def trans_group_index(from_state: int, to_state: int, num_states: int) -> int:
-    """Return compact transition-group index, omitting diagonal entries."""
+    """Return compact transition-group index, omitting diagonal entries.
+
+    Transition storage skips ``from_state == to_state`` because self-transitions
+    are invalid and would only waste blob space.
+    """
     if num_states < MIN_STATES or num_states > MAX_STATES:
         raise ValueError("invalid num_states")
     if from_state < 0 or from_state >= num_states or to_state < 0 or to_state >= num_states:
@@ -91,7 +110,11 @@ def trans_group_index(from_state: int, to_state: int, num_states: int) -> int:
 
 
 def trans_index(from_state: int, to_state: int, clock: int, bucket: int, num_states: int) -> int:
-    """Return transition index for (from, to, clock, bucket)."""
+    """Return the flat blob index for one transition bucket.
+
+    Transition values start immediately after the holding section so callers can
+    treat the blob as one dense counter array.
+    """
     if clock < 0 or clock >= CLOCK_COUNT:
         raise IndexError("clock out of range")
     if bucket < 0 or bucket >= BUCKETS_PER_WEEK:

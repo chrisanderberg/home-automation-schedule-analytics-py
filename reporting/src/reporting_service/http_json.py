@@ -1,4 +1,8 @@
-"""Helpers for decoding JSON API response bodies."""
+"""Helpers for decoding JSON API response bodies.
+
+Reporting code calls back into the testing API and needs predictable handling
+for malformed responses, especially when surfacing failures in Dagster.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +14,11 @@ TRUNCATION_SUFFIX = "... (truncated)"
 
 
 def _sanitize_error_body(body: str) -> str:
-    """Return a bounded representation of invalid payload text (no PII redaction)."""
+    """Return a bounded representation of invalid payload text.
+
+    The goal is to preserve enough response context for debugging without
+    dumping arbitrarily large bodies into Dagster error metadata.
+    """
     compact = " ".join(body.splitlines()).strip()
     if len(compact) > MAX_ERROR_BODY_CHARS:
         prefix_len = max(0, MAX_ERROR_BODY_CHARS - len(TRUNCATION_SUFFIX))

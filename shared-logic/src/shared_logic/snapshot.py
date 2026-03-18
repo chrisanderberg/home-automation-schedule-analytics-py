@@ -1,4 +1,8 @@
-"""Snapshot export utilities shared by API and reporting flow."""
+"""Snapshot export utilities shared by API and reporting flow.
+
+Snapshot files are SQLite backups of live databases. The helpers here keep the
+export logic consistent between the Flask API and Dagster validation jobs.
+"""
 
 from __future__ import annotations
 
@@ -6,16 +10,17 @@ import shutil
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
+import os
 from pathlib import Path
 from uuid import uuid4
 
-from .paths import snapshot_root, test_snapshot_root
+from .paths import repository_root, snapshot_root, test_snapshot_root
 
 _SIDECAR_EXTS = ("-wal", "-shm", "-journal")
 
 
 def export_snapshot(conn: sqlite3.Connection) -> Path:
-    """Write timestamped production snapshot under data/snapshots."""
+    """Write a timestamped production snapshot under ``data/snapshots``."""
     root = snapshot_root()
     ts = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S-%f")
     out = root / f"snapshot-{ts}.sqlite"
@@ -23,7 +28,7 @@ def export_snapshot(conn: sqlite3.Connection) -> Path:
 
 
 def export_snapshot_for_test(conn: sqlite3.Connection, test_name: str, snapshot_name: str) -> Path:
-    """Write deterministic test snapshot path for validation flows."""
+    """Write a deterministic test snapshot path for validation flows."""
     safe_test_name = _validate_name_component(test_name, "test_name")
     safe_snapshot_name = _validate_name_component(snapshot_name, "snapshot_name")
     root = test_snapshot_root()
@@ -62,7 +67,8 @@ def _backup_to_path(conn: sqlite3.Connection, out_path: Path) -> Path:
     success = False
 
     try:
-        # Use SQLite backup API for consistent local snapshots.
+        # The backup API gives a transactionally consistent copy without asking
+        # callers to stop writes to the source database first.
         with closing(sqlite3.connect(str(temp_path), isolation_level=None)) as dst:
             conn.backup(dst)
         _cleanup_sidecars(temp_path)
@@ -100,12 +106,19 @@ def _validate_name_component(value: str, label: str) -> str:
 
 
 def reset_test_db_files(db_path: Path) -> None:
-    """Remove test DB, SQLite sidecar files, and any related directories.
+    """Remove a test DB plus SQLite sidecar files left by prior runs.
 
-    Deletes the given db_path and its sidecar variants (-wal, -shm, -journal).
-    Files are unlinked; directories are removed recursively (shutil.rmtree).
+    The reset endpoint uses this to make repeated test flows deterministic.
     """
-    for candidate in (db_path, *(db_path.with_name(db_path.name + ext) for ext in _SIDECAR_EXTS)):
+    override = os.environ.get("TEST_DATA_DIR", "").strip()
+    test_root = Path(override).resolve() if override else (repository_root() / "test-data").resolve()
+    resolved_db_path = db_path.resolve()
+    try:
+        resolved_db_path.relative_to(test_root)
+    except ValueError as exc:
+        raise ValueError(f"refusing to reset path outside test data root: {resolved_db_path}") from exc
+
+    for candidate in (resolved_db_path, *(resolved_db_path.with_name(resolved_db_path.name + ext) for ext in _SIDECAR_EXTS)):
         if candidate.exists():
             if candidate.is_file():
                 candidate.unlink(missing_ok=True)

@@ -17,6 +17,10 @@ for f in workspace.yaml dagster.yaml; do
     exit 1
   fi
 done
+if [ -z "${HAA_LATITUDE:-}" ] || [ -z "${HAA_LONGITUDE:-}" ]; then
+  echo "error: HAA_LATITUDE and HAA_LONGITUDE must be set" >&2
+  exit 1
+fi
 CURRENT_UID="$(id -u)"
 for dir in "$dagster_home" /app/data; do
   if [ -d "$dir" ]; then

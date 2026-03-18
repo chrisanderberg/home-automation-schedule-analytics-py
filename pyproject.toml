@@ -32,4 +32,6 @@ extend-select = ["TRY"]
 ignore = ["TRY003"]
 
 [tool.setuptools]
-packages = []
+
+[tool.setuptools.packages.find]
+where = ["aggregation/src", "reporting/src", "shared-logic/src"]

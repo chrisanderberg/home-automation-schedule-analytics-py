@@ -1,4 +1,9 @@
-"""Ingestion orchestration for holding and transition events."""
+"""Ingestion orchestration for holding and transition events.
+
+This module is the bridge between validated API payloads and the dense storage
+format. It resolves control metadata, splits time across quarter and bucket
+boundaries, and applies the resulting counter updates to SQLite.
+"""
 
 from __future__ import annotations
 
@@ -68,7 +73,12 @@ def _validate_transition(input_data: TransitionInput) -> None:
 
 
 def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInput) -> None:
-    """Ingest one holding interval across quarter and five-clock bucket splits."""
+    """Ingest one holding interval across quarter and five-clock bucket splits.
+
+    A single holding interval may span multiple UTC quarters and may split into
+    different weekly buckets under each clock definition, so the update is built
+    as a layered fan-out from one input event.
+    """
     _validate_holding(input_data)
 
     try:
@@ -88,6 +98,8 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
 
         def _make_update(span_start_ms: int, span_end_ms: int) -> Callable[[Blob], None]:
             def _update(blob: Blob) -> None:
+                # Each clock can split the same interval differently, but all of
+                # them ultimately write into the same blob layout.
                 splitters = [
                     (CLOCK_UTC, lambda: split_interval_utc(span_start_ms, span_end_ms)),
                     (
@@ -130,7 +142,11 @@ def ingest_holding(conn: sqlite3.Connection, cfg: Config, input_data: HoldingInp
 
 
 def ingest_transition(conn: sqlite3.Connection, cfg: Config, input_data: TransitionInput) -> None:
-    """Ingest one transition event into all defined clock buckets."""
+    """Ingest one transition event into all defined clock buckets.
+
+    Unlike holdings, transitions affect exactly one bucket per defined clock, so
+    the update path stays within a single quarter row.
+    """
     _validate_transition(input_data)
 
     try:
@@ -153,6 +169,8 @@ def ingest_transition(conn: sqlite3.Connection, cfg: Config, input_data: Transit
         Returns:
             None.
         """
+        # Undefined clocks are skipped so unusual solar edge cases do not block
+        # ingestion for the clocks that remain well-defined.
         bucket_fns = [
             (CLOCK_UTC, lambda: bucket_at_utc(input_data.timestamp_ms)),
             (CLOCK_LOCAL, lambda: bucket_at_local(input_data.timestamp_ms, cfg.time_zone)),

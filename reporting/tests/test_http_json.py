@@ -1,4 +1,4 @@
-"""Reporting JSON helper tests."""
+"""Tests for the small HTTP JSON decoding shim used by reporting assets."""
 
 import unittest
 
@@ -6,6 +6,8 @@ from reporting_service.http_json import MAX_ERROR_BODY_CHARS, TRUNCATION_SUFFIX,
 
 
 class HttpJsonTests(unittest.TestCase):
+    """Keep the helper's fallback behavior explicit for future refactors."""
+
     def test_decode_object(self):
         # Verifies valid JSON object bodies decode as dictionaries.
         self.assertEqual(decode_json_body('{"a":1}', decode_error_as_error_payload=False), {"a": 1})
@@ -39,6 +41,19 @@ class HttpJsonTests(unittest.TestCase):
         self.assertEqual(
             decode_json_body(invalid, decode_error_as_error_payload=True),
             {"error": expected},
+        )
+
+    def test_decode_invalid_multiline_payload_compacts_whitespace(self):
+        # Tabs are preserved today; this locks in the current sanitization contract.
+        self.assertEqual(
+            decode_json_body("bad\njson\tpayload", decode_error_as_error_payload=True),
+            {"error": "bad json\tpayload"},
+        )
+
+    def test_decode_invalid_whitespace_only_body_returns_unparseable_payload(self):
+        self.assertEqual(
+            decode_json_body("   \n\t", decode_error_as_error_payload=True),
+            {"error": "unparseable payload"},
         )
 
 

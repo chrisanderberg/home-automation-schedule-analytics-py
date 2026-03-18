@@ -1,4 +1,8 @@
-"""Dagster definitions wiring for reporting assets, schedules, and sensors."""
+"""Dagster definitions wiring for reporting assets, schedules, and sensors.
+
+Keeping the Dagster object graph in one small module makes it easy to see which
+assets run on a schedule and which jobs are intended for ad hoc validation.
+"""
 
 import os
 
@@ -11,6 +15,8 @@ from reporting_service.assets import (
     testing_snapshot_summary,
 )
 
+# Separate jobs make it possible to materialize the normal snapshot summary and
+# the test-validation flow independently from the Dagster UI or tests.
 snapshot_job = define_asset_job("snapshot_job", selection=["snapshot_summary"])
 testing_snapshot_job = define_asset_job("testing_snapshot_job", selection=["testing_snapshot_summary"])
 testing_api_flow_job = define_asset_job("testing_api_flow_job", selection=["testing_api_snapshot_validation"])
